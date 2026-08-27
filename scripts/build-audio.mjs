@@ -160,19 +160,17 @@ function hasFfmpeg() {
 const FFMPEG_AVAILABLE = hasFfmpeg();
 
 // Gemini TTS returns raw PCM; turning that into an mp3 needs ffmpeg. Without
-// it we still write a valid, playable file — just a .wav — rather than
-// failing outright. If this branch is the one that actually ran, the
-// extension below no longer matches what `src/audio/player.ts` requests: go
-// change the extension in `elementFor()` (the only place it is hardcoded)
-// before shipping these files.
+// it we still write a valid, playable file — just a .wav. The format is
+// recorded in the manifest and the player reads it from there, so neither
+// branch requires editing the app: ffmpeg is purely a size optimisation
+// (roughly a tenth of the bytes), never a prerequisite.
 const OUTPUT_EXT = FFMPEG_AVAILABLE ? "mp3" : "wav";
 
 if (!FFMPEG_AVAILABLE) {
   console.warn(
-    "[build-audio] ffmpeg not found on PATH: writing .wav files instead of " +
-      ".mp3. src/audio/player.ts hardcodes the .mp3 extension in " +
-      "elementFor() — update that one line to '.wav' if you ship files " +
-      "built this way.",
+    "[build-audio] ffmpeg not found on PATH: writing .wav instead of .mp3. " +
+      "This works as-is — the manifest records the format and the app follows " +
+      "it. Install ffmpeg and re-run with --force only if you want smaller files.",
   );
 }
 
@@ -299,7 +297,10 @@ async function main() {
     .map((job) => job.key)
     .filter((key) => existsSync(join(AUDIO_DIR, `${key}.${OUTPUT_EXT}`)));
 
-  writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifestKeys, null, 2)}\n`);
+  // Format travels with the key list so the app plays whatever was actually
+  // written, whether or not ffmpeg was on this machine.
+  const manifest = { format: OUTPUT_EXT, keys: manifestKeys };
+  writeFileSync(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
 
   console.log(
     `[build-audio] built ${builtCount}, skipped ${skippedCount} (already existed), ` +

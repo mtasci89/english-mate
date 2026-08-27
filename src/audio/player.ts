@@ -12,16 +12,35 @@ import type { Speakable } from "../types";
 
 let manifest: Set<string> | null = null;
 let manifestLoad: Promise<Set<string>> | null = null;
+/**
+ * Set by the manifest. The builder writes mp3 when ffmpeg is available and wav
+ * otherwise, and records which — so a machine without ffmpeg needs no code
+ * change here, and the two can never silently disagree about the extension.
+ */
+let audioFormat = "mp3";
 const preloaded = new Map<string, HTMLAudioElement>();
 let current: HTMLAudioElement | null = null;
+
+type ManifestShape = { format?: unknown; keys?: unknown } | unknown[];
+
+function parseManifest(data: ManifestShape) {
+  // A bare array is the pre-format manifest; it only ever described mp3.
+  if (Array.isArray(data)) return { format: "mp3", keys: data.map(String) };
+
+  const format = typeof data.format === "string" ? data.format : "mp3";
+  const keys = Array.isArray(data.keys) ? data.keys.map(String) : [];
+  return { format, keys };
+}
 
 export function loadManifest(): Promise<Set<string>> {
   if (manifestLoad) return manifestLoad;
 
   manifestLoad = fetch("/audio/manifest.json")
     .then((response) => (response.ok ? response.json() : []))
-    .then((keys: unknown) => {
-      manifest = new Set(Array.isArray(keys) ? keys.map(String) : []);
+    .then((data: ManifestShape) => {
+      const parsed = parseManifest(data);
+      audioFormat = parsed.format;
+      manifest = new Set(parsed.keys);
       return manifest;
     })
     .catch(() => {
@@ -40,7 +59,7 @@ function elementFor(key: string) {
   const existing = preloaded.get(key);
   if (existing) return existing;
 
-  const audio = new Audio(`/audio/${key}.mp3`);
+  const audio = new Audio(`/audio/${key}.${audioFormat}`);
   audio.preload = "auto";
   preloaded.set(key, audio);
   return audio;
