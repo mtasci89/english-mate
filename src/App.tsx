@@ -73,9 +73,9 @@ const topicLabels: Record<Topic, string> = {
 };
 
 const correctionLabels: Record<CorrectionStyle, string> = {
-  gentle: "Gentle",
-  balanced: "Balanced",
-  direct: "Direct",
+  gentle: "Barely correct",
+  balanced: "Natural recast",
+  direct: "Clear recast",
 };
 
 const starters: Record<Topic, string[]> = {
@@ -150,7 +150,7 @@ function nextStarter(topic: Topic, count: number) {
   return list[count % list.length];
 }
 
-function buildResponse(input: string, settings: Settings, turnCount: number) {
+function buildFallbackResponse(input: string, settings: Settings, turnCount: number) {
   const cleanInput = normalize(input);
   const isTurkish = looksTurkish(cleanInput);
   const starter = nextStarter(settings.topic, turnCount);
@@ -165,9 +165,9 @@ function buildResponse(input: string, settings: Settings, turnCount: number) {
   if (isTurkish && settings.turkishBridge) {
     return {
       text:
-        "Anladım. Bunu kısa bir İngilizce cümleye çevirelim: " +
+        "Anladım. Bunu İngilizce şöyle söyleyebiliriz: " +
         starter +
-        " Önce bunu söyle, sonra kendi cevabını ekle.",
+        " Sonra bana biraz daha anlat.",
       lang: "tr" as const,
     };
   }
@@ -176,21 +176,21 @@ function buildResponse(input: string, settings: Settings, turnCount: number) {
   const shortAnswer = words.length < 4;
   const correctionLead =
     settings.correctionStyle === "direct"
-      ? "Correction:"
+      ? "You can say:"
       : settings.correctionStyle === "gentle"
-        ? "Nice. A more natural way is:"
-        : "Good. Try this stronger sentence:";
+        ? "Nice. I would say:"
+        : "That makes sense. I would say:";
 
   if (settings.level === "early") {
     return {
-      text: `${correctionLead} I ${cleanInput.toLowerCase()}. Now say it once more.`,
+      text: `${correctionLead} ${cleanInput}. What else happened?`,
       lang: "en" as const,
     };
   }
 
   if (shortAnswer) {
     return {
-      text: `${correctionLead} I can say, "${cleanInput}, please." Now answer: ${starter}`,
+      text: `${correctionLead} "${cleanInput}, please." ${starter}`,
       lang: "en" as const,
     };
   }
@@ -203,9 +203,27 @@ function buildResponse(input: string, settings: Settings, turnCount: number) {
   }
 
   return {
-    text: `I understood: "${cleanInput}". Now make it a little longer with because.`,
+    text: `I understand. ${starter}`,
     lang: "en" as const,
   };
+}
+
+async function requestGeminiResponse(
+  input: string,
+  settings: Settings,
+  messages: Message[],
+) {
+  const response = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text: input, settings, messages }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Chat request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as { text: string; lang?: "en" | "tr" };
 }
 
 export function App() {
@@ -216,7 +234,7 @@ export function App() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      text: "Hi. I am ready to talk. Tell me about your day.",
+      text: "Hi. I am here. Tell me anything you want.",
       lang: "en",
     },
   ]);
@@ -225,8 +243,11 @@ export function App() {
 
   const assistantReply = messages.filter((message) => message.role === "assistant").at(-1);
   const childTurns = messages.filter((message) => message.role === "child").length;
-  const currentPrompt = useMemo(
-    () => nextStarter(settings.topic, childTurns),
+  const conversationCue = useMemo(
+    () =>
+      childTurns === 0
+        ? "Start with anything: your day, a toy, food, school, or how you feel."
+        : nextStarter(settings.topic, childTurns),
     [childTurns, settings.topic],
   );
 
@@ -251,16 +272,23 @@ export function App() {
     window.speechSynthesis.speak(utterance);
   }
 
-  function addAssistantResponse(input: string) {
+  async function addAssistantResponse(input: string, nextMessages: Message[]) {
     setEngineState("thinking");
-    window.setTimeout(() => {
-      const response = buildResponse(input, settings, childTurns);
+    try {
+      const response = await requestGeminiResponse(input, settings, nextMessages);
+      setMessages((current) => [
+        ...current.slice(-7),
+        { role: "assistant", text: response.text, lang: response.lang ?? "en" },
+      ]);
+      speak(response.text, response.lang ?? "en");
+    } catch {
+      const response = buildFallbackResponse(input, settings, childTurns);
       setMessages((current) => [
         ...current.slice(-7),
         { role: "assistant", text: response.text, lang: response.lang },
       ]);
       speak(response.text, response.lang);
-    }, 300);
+    }
   }
 
   function handleFinalTranscript(text: string) {
@@ -270,12 +298,16 @@ export function App() {
       return;
     }
 
+    const childMessage: Message = {
+      role: "child",
+      text: cleanText,
+      lang: languageMode === "turkish" ? "tr" : "en",
+    };
+    const nextMessages = [...messages.slice(-7), childMessage];
+
     setTranscript(cleanText);
-    setMessages((current) => [
-      ...current.slice(-7),
-      { role: "child", text: cleanText, lang: languageMode === "turkish" ? "tr" : "en" },
-    ]);
-    addAssistantResponse(cleanText);
+    setMessages(nextMessages);
+    void addAssistantResponse(cleanText, nextMessages);
   }
 
   function startListening() {
@@ -331,7 +363,7 @@ export function App() {
   }
 
   function startSession() {
-    const prompt = currentPrompt;
+    const prompt = "Hi. What are you thinking about today?";
     setMessages((current) => [...current.slice(-7), { role: "assistant", text: prompt, lang: "en" }]);
     speak(prompt);
   }
@@ -342,14 +374,14 @@ export function App() {
         <header className="session-header">
           <div>
             <p>English Mate</p>
-            <h1>Voice practice engine</h1>
+            <h1>Talk with me</h1>
           </div>
           <span className={`engine-pill ${engineState}`}>{engineState}</span>
         </header>
 
         <div className="prompt-box">
-          <span>Current prompt</span>
-          <strong>{currentPrompt}</strong>
+          <span>Conversation cue</span>
+          <strong>{conversationCue}</strong>
         </div>
 
         <div className="voice-controls">
@@ -392,7 +424,7 @@ export function App() {
 
         <div className="secondary-actions">
           <button type="button" onClick={startSession}>
-            Read prompt
+            Say hello
           </button>
           <button
             type="button"
@@ -413,7 +445,7 @@ export function App() {
       <aside className="parent-panel" aria-label="Parent panel">
         <header>
           <p>Parent panel</p>
-          <h2>Session settings</h2>
+          <h2>Conversation settings</h2>
         </header>
 
         <label className="field">
@@ -455,7 +487,7 @@ export function App() {
         </div>
 
         <div className="field">
-          <span>Correction style</span>
+          <span>Coaching style</span>
           <div className="segmented">
             {(Object.keys(correctionLabels) as CorrectionStyle[]).map((style) => (
               <button
@@ -481,11 +513,11 @@ export function App() {
         </label>
 
         <div className="engine-plan">
-          <h3>Next engine layer</h3>
+          <h3>Gemini layer</h3>
           <ol>
-            <li>Browser captures child speech.</li>
-            <li>Backend transcribes and detects Turkish help.</li>
-            <li>AI coach returns one short spoken correction.</li>
+            <li>Child speaks from the phone or toy.</li>
+            <li>Netlify calls Gemini Flash without exposing the key.</li>
+            <li>Gemini replies like a natural speaking friend.</li>
             <li>Phone and physical toy use the same endpoint.</li>
           </ol>
         </div>

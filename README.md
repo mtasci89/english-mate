@@ -16,21 +16,42 @@ when the child gets stuck or asks for help.
 - Parent panel for level, topic, correction style, and Turkish bridge.
 - Browser speech recognition for capturing the child's answer.
 - Browser text-to-speech for reading prompts and responses aloud.
-- Deterministic response logic so the first version works before adding an AI
-  backend.
+- Gemini Flash chat backend through a Netlify Function, with a deterministic
+  fallback if the environment variable is missing.
 
 ## Target Architecture
 
 Both the phone interface and the physical toy should talk to the same backend.
 
 1. Client records speech.
-2. Backend transcribes audio.
-3. Conversation engine detects whether the child used English or asked for
-   Turkish help.
-4. AI coach returns one short response: correction, expansion, or follow-up
-   question.
-5. Text-to-speech returns audio.
-6. Phone or toy plays the audio response.
+2. The browser speech API turns it into text for the first prototype.
+3. The frontend sends text, parent settings, and recent conversation to
+   `/api/chat`.
+4. The Netlify Function calls Gemini Flash with `GEMINI_API_KEY`.
+5. Gemini returns one short natural spoken response.
+6. Phone or toy plays the response with text-to-speech.
+
+## Netlify Deployment
+
+Set this environment variable in Netlify:
+
+```txt
+GEMINI_API_KEY=your_google_ai_studio_key
+```
+
+Optional:
+
+```txt
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+Netlify build settings:
+
+```txt
+Build command: npm run build:netlify
+Publish directory: netlify-dist
+Functions directory: netlify/functions
+```
 
 ## Hardware Path
 
