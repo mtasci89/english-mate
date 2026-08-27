@@ -1,29 +1,42 @@
 # English Mate
 
-English Mate is a mobile-first language toy prototype for children learning
-English. The child talks to a friendly buddy, gets short English prompts, and can
-switch to Turkish help when they are stuck.
+English Mate is a voice-first English practice engine for a child. The first
+interface runs in a mobile browser. The same engine is intended to power a later
+physical toy with a microphone, speaker, button, and simple status light.
 
-## Product Shape
+## Product Goal
 
-- Child screen: one large talk button, a friendly toy face, visual quests, target
-  words, and replay.
-- Parent strip: level, play world, and Turkish bridge controls.
-- First learning mode: deterministic, browser-only practice that works without an
-  AI backend.
-- Next learning mode: connect the same UI to a speech-to-text, LLM, and TTS
+Help the child improve spoken English through short, safe, repeated
+conversations. Turkish is not the target language; it is only a support bridge
+when the child gets stuck or asks for help.
+
+## Current Prototype
+
+- Mobile-friendly voice practice screen.
+- Parent panel for level, topic, correction style, and Turkish bridge.
+- Browser speech recognition for capturing the child's answer.
+- Browser text-to-speech for reading prompts and responses aloud.
+- Deterministic response logic so the first version works before adding an AI
   backend.
 
-## Hardware Roadmap
+## Target Architecture
 
-1. Web app on phone or tablet.
-2. Raspberry Pi 5 with a USB microphone, small speaker, one large button, and an
-   LED ring.
-3. Optional ESP32 or Arduino board for RFID cards, buttons, lights, and sensors.
-4. Optional local model workstation backend for private inference.
+Both the phone interface and the physical toy should talk to the same backend.
 
-## Language Design
+1. Client records speech.
+2. Backend transcribes audio.
+3. Conversation engine detects whether the child used English or asked for
+   Turkish help.
+4. AI coach returns one short response: correction, expansion, or follow-up
+   question.
+5. Text-to-speech returns audio.
+6. Phone or toy plays the audio response.
 
-The target language is English. Turkish is used as a bridge only when the child
-asks for help or switches the listening mode to Turkish help. The toy should then
-give a short Turkish reassurance and bring the child back to an English sentence.
+## Hardware Path
+
+1. Keep the first version web-based for fast iteration.
+2. Add a Raspberry Pi 5 or small Linux device for the physical toy.
+3. Attach USB microphone, small speaker, one large button, and status LED.
+4. Optionally use an ESP32 or Arduino board for extra buttons, RFID cards, or
+   sensors.
+5. Point the toy firmware at the same backend used by the phone.

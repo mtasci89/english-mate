@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 type SpeechRecognitionEvent = Event & {
   results: {
@@ -37,204 +37,208 @@ declare global {
   }
 }
 
-type Level = "mini" | "starter" | "brave";
-type Scene = "animals" | "home" | "park";
-type Mood = "idle" | "listening" | "thinking" | "speaking" | "celebrate";
+type Level = "early" | "sentence" | "conversation";
+type CorrectionStyle = "gentle" | "balanced" | "direct";
+type Topic = "daily" | "school" | "family" | "feelings";
+type LanguageMode = "english" | "turkish";
+type EngineState = "ready" | "listening" | "thinking" | "speaking";
 
-type ChatLine = {
-  by: "child" | "buddy";
+type Message = {
+  role: "child" | "assistant";
   text: string;
-  lang?: "en" | "tr";
+  lang: "en" | "tr";
 };
 
-type Quest = {
-  title: string;
-  prompt: string;
-  pattern: string;
-  words: string[];
-  scene: Scene;
+type Settings = {
+  childName: string;
+  level: Level;
+  topic: Topic;
+  correctionStyle: CorrectionStyle;
+  turkishBridge: boolean;
 };
 
-const quests: Quest[] = [
-  {
-    title: "Animal action",
-    prompt: "Say what the animal is doing.",
-    pattern: "The dog is running.",
-    words: ["dog", "cat", "bird", "run", "jump"],
-    scene: "animals",
-  },
-  {
-    title: "Tiny choice",
-    prompt: "Choose one and say a full sentence.",
-    pattern: "I like the red car.",
-    words: ["red", "blue", "car", "ball", "train"],
-    scene: "home",
-  },
-  {
-    title: "Feeling words",
-    prompt: "Tell me how the friend feels.",
-    pattern: "The boy is happy.",
-    words: ["happy", "sleepy", "hungry", "sad", "excited"],
-    scene: "park",
-  },
-  {
-    title: "Make it bigger",
-    prompt: "Start small, then add one more word.",
-    pattern: "A small yellow duck is swimming.",
-    words: ["small", "yellow", "duck", "swim", "fast"],
-    scene: "animals",
-  },
-];
+const STORAGE_KEY = "english-mate-voice-settings";
 
-const sceneLabels: Record<Scene, string> = {
-  animals: "Animals",
-  home: "Home",
-  park: "Park",
+const levelLabels: Record<Level, string> = {
+  early: "Word to phrase",
+  sentence: "Full sentences",
+  conversation: "Small conversation",
 };
 
-const levelCopy: Record<Level, { label: string; sentence: string; nudge: string }> = {
-  mini: {
-    label: "Mini",
-    sentence: "Try two or three words.",
-    nudge: "Great start. I will make it a little bigger.",
-  },
-  starter: {
-    label: "Starter",
-    sentence: "Try one full sentence.",
-    nudge: "Nice sentence. Let's add one detail.",
-  },
-  brave: {
-    label: "Brave",
-    sentence: "Try two connected sentences.",
-    nudge: "Strong idea. Now connect it with because.",
-  },
+const topicLabels: Record<Topic, string> = {
+  daily: "Daily life",
+  school: "School",
+  family: "Family",
+  feelings: "Feelings",
 };
 
-const turkishHints = [
-  "ne demek",
+const correctionLabels: Record<CorrectionStyle, string> = {
+  gentle: "Gentle",
+  balanced: "Balanced",
+  direct: "Direct",
+};
+
+const starters: Record<Topic, string[]> = {
+  daily: [
+    "What did you do today?",
+    "Tell me about something you like.",
+    "What do you want to eat?",
+  ],
+  school: [
+    "What did you learn at school?",
+    "Tell me about your teacher.",
+    "What is in your school bag?",
+  ],
+  family: [
+    "Who is at home with you?",
+    "Tell me about your family.",
+    "What do you do with your dad?",
+  ],
+  feelings: [
+    "How do you feel today?",
+    "What makes you happy?",
+    "When do you feel excited?",
+  ],
+};
+
+const turkishSignals = [
   "bilmiyorum",
-  "yardim",
-  "yardım",
-  "nasıl",
-  "türkçe",
-  "soyle",
-  "söyle",
   "anlamadım",
+  "yardım",
+  "yardim",
+  "ne demek",
+  "nasıl söylenir",
+  "nasil soylenir",
+  "türkçe",
+  "turkce",
   "zor",
 ];
 
-function looksTurkish(text: string) {
-  const lower = text.toLocaleLowerCase("tr-TR");
-  return /[çğıöşü]/i.test(text) || turkishHints.some((hint) => lower.includes(hint));
+function defaultSettings(): Settings {
+  return {
+    childName: "My child",
+    level: "sentence",
+    topic: "daily",
+    correctionStyle: "balanced",
+    turkishBridge: true,
+  };
+}
+
+function readSettings() {
+  if (typeof window === "undefined") return defaultSettings();
+
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+  if (!stored) return defaultSettings();
+
+  try {
+    return { ...defaultSettings(), ...(JSON.parse(stored) as Partial<Settings>) };
+  } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return defaultSettings();
+  }
 }
 
 function normalize(text: string) {
   return text.trim().replace(/\s+/g, " ");
 }
 
-function readStoredSettings() {
-  if (typeof window === "undefined") {
-    return {} as { level?: Level; scene?: Scene; turkishBridge?: boolean };
-  }
-
-  const stored = window.localStorage.getItem("english-mate-settings");
-  if (!stored) return {};
-
-  try {
-    return JSON.parse(stored) as {
-      level?: Level;
-      scene?: Scene;
-      turkishBridge?: boolean;
-    };
-  } catch {
-    window.localStorage.removeItem("english-mate-settings");
-    return {};
-  }
+function looksTurkish(text: string) {
+  const lower = text.toLocaleLowerCase("tr-TR");
+  return /[çğıöşü]/i.test(text) || turkishSignals.some((signal) => lower.includes(signal));
 }
 
-function buildBuddyReply(
-  rawText: string,
-  quest: Quest,
-  level: Level,
-  turkishBridge: boolean,
-) {
-  const text = normalize(rawText);
-  const lower = text.toLowerCase();
-  const usedWords = quest.words.filter((word) => lower.includes(word));
-  const isTurkish = looksTurkish(text);
+function nextStarter(topic: Topic, count: number) {
+  const list = starters[topic];
+  return list[count % list.length];
+}
 
-  if (isTurkish && turkishBridge) {
+function buildResponse(input: string, settings: Settings, turnCount: number) {
+  const cleanInput = normalize(input);
+  const isTurkish = looksTurkish(cleanInput);
+  const starter = nextStarter(settings.topic, turnCount);
+
+  if (!cleanInput) {
+    return {
+      text: starter,
+      lang: "en" as const,
+    };
+  }
+
+  if (isTurkish && settings.turkishBridge) {
     return {
       text:
-        "Takildigin yeri anladim. Simdi bunu Ingilizce soyleyelim: " +
-        quest.pattern +
-        " Benimle tekrar et.",
+        "Anladım. Bunu kısa bir İngilizce cümleye çevirelim: " +
+        starter +
+        " Önce bunu söyle, sonra kendi cevabını ekle.",
       lang: "tr" as const,
-      success: true,
     };
   }
 
-  if (!text) {
+  const words = cleanInput.split(" ");
+  const shortAnswer = words.length < 4;
+  const correctionLead =
+    settings.correctionStyle === "direct"
+      ? "Correction:"
+      : settings.correctionStyle === "gentle"
+        ? "Nice. A more natural way is:"
+        : "Good. Try this stronger sentence:";
+
+  if (settings.level === "early") {
     return {
-      text: "I am ready. Press the button and try: " + quest.pattern,
+      text: `${correctionLead} I ${cleanInput.toLowerCase()}. Now say it once more.`,
       lang: "en" as const,
-      success: false,
     };
   }
 
-  if (usedWords.length >= 2 || lower.split(" ").length >= 4) {
-    const detail =
-      level === "brave"
-        ? " because it is fun."
-        : level === "starter"
-          ? " Add one color or feeling."
-          : " Say it one more time.";
+  if (shortAnswer) {
     return {
-      text: `${levelCopy[level].nudge} You said: "${text}". Now try: ${quest.pattern}${detail}`,
+      text: `${correctionLead} I can say, "${cleanInput}, please." Now answer: ${starter}`,
       lang: "en" as const,
-      success: true,
+    };
+  }
+
+  if (settings.level === "conversation") {
+    return {
+      text: `I understood: "${cleanInput}". Tell me one more detail. ${starter}`,
+      lang: "en" as const,
     };
   }
 
   return {
-    text: `Good try. Let's make it a full English sentence: ${quest.pattern}`,
+    text: `I understood: "${cleanInput}". Now make it a little longer with because.`,
     lang: "en" as const,
-    success: true,
   };
 }
 
 export default function Home() {
-  const [level, setLevel] = useState<Level>(() => readStoredSettings().level ?? "starter");
-  const [scene, setScene] = useState<Scene>(() => readStoredSettings().scene ?? "animals");
-  const [questIndex, setQuestIndex] = useState(0);
-  const [turkishBridge, setTurkishBridge] = useState(
-    () => readStoredSettings().turkishBridge ?? true,
-  );
-  const [listenMode, setListenMode] = useState<"english" | "turkish">("english");
-  const [mood, setMood] = useState<Mood>("idle");
+  const [settings, setSettings] = useState<Settings>(() => readSettings());
+  const [languageMode, setLanguageMode] = useState<LanguageMode>("english");
+  const [engineState, setEngineState] = useState<EngineState>("ready");
   const [transcript, setTranscript] = useState("");
-  const [lastReply, setLastReply] = useState("Hi! Press the big button and tell me about the picture.");
-  const [chat, setChat] = useState<ChatLine[]>([
+  const [messages, setMessages] = useState<Message[]>([
     {
-      by: "buddy",
-      text: "Hi! Press the big button and tell me about the picture.",
+      role: "assistant",
+      text: "Hi. I am ready to talk. Tell me about your day.",
       lang: "en",
     },
   ]);
   const [speechSupported, setSpeechSupported] = useState(true);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
 
-  const currentQuest = useMemo(() => {
-    const sceneQuests = quests.filter((quest) => quest.scene === scene);
-    return sceneQuests[questIndex % sceneQuests.length] ?? quests[0];
-  }, [questIndex, scene]);
+  const assistantReply = messages.filter((message) => message.role === "assistant").at(-1);
+  const childTurns = messages.filter((message) => message.role === "child").length;
+  const currentPrompt = useMemo(
+    () => nextStarter(settings.topic, childTurns),
+    [childTurns, settings.topic],
+  );
 
-  useEffect(() => {
-    window.localStorage.setItem(
-      "english-mate-settings",
-      JSON.stringify({ level, scene, turkishBridge }),
-    );
-  }, [level, scene, turkishBridge]);
+  function updateSettings(next: Partial<Settings>) {
+    setSettings((current) => {
+      const updated = { ...current, ...next };
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }
 
   function speak(text: string, lang: "en" | "tr" = "en") {
     if (!("speechSynthesis" in window)) return;
@@ -242,42 +246,41 @@ export default function Home() {
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = lang === "tr" ? "tr-TR" : "en-US";
-    utterance.rate = lang === "tr" ? 0.92 : 0.84;
-    utterance.pitch = 1.08;
-    utterance.onstart = () => setMood("speaking");
-    utterance.onend = () => setMood("idle");
+    utterance.rate = lang === "tr" ? 0.92 : 0.82;
+    utterance.pitch = 1.02;
+    utterance.onstart = () => setEngineState("speaking");
+    utterance.onend = () => setEngineState("ready");
     window.speechSynthesis.speak(utterance);
   }
 
-  function addBuddyLine(text: string, lang: "en" | "tr" = "en") {
-    setLastReply(text);
-    setChat((lines) => [...lines.slice(-5), { by: "buddy", text, lang }]);
-    speak(text, lang);
+  function addAssistantResponse(input: string) {
+    setEngineState("thinking");
+    window.setTimeout(() => {
+      const response = buildResponse(input, settings, childTurns);
+      setMessages((current) => [
+        ...current.slice(-7),
+        { role: "assistant", text: response.text, lang: response.lang },
+      ]);
+      speak(response.text, response.lang);
+    }, 300);
   }
 
-  function handleTranscript(text: string) {
+  function handleFinalTranscript(text: string) {
     const cleanText = normalize(text);
-    if (!cleanText) return;
+    if (!cleanText) {
+      setEngineState("ready");
+      return;
+    }
 
     setTranscript(cleanText);
-    setChat((lines) => [...lines.slice(-5), { by: "child", text: cleanText }]);
-    setMood("thinking");
-
-    window.setTimeout(() => {
-      const reply = buildBuddyReply(cleanText, currentQuest, level, turkishBridge);
-      if (reply.success) {
-        setMood("celebrate");
-        window.setTimeout(() => setMood("speaking"), 450);
-      }
-      addBuddyLine(reply.text, reply.lang);
-    }, 420);
+    setMessages((current) => [...current.slice(-7), { role: "child", text: cleanText, lang: languageMode === "turkish" ? "tr" : "en" }]);
+    addAssistantResponse(cleanText);
   }
 
   function startListening() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setSpeechSupported(false);
-      addBuddyLine("Speech recognition is not available in this browser yet. Try Chrome or Safari.");
       return;
     }
 
@@ -288,223 +291,211 @@ export default function Home() {
     recognitionRef.current = recognition;
     recognition.continuous = false;
     recognition.interimResults = true;
-    recognition.lang = listenMode === "turkish" ? "tr-TR" : "en-US";
+    recognition.lang = languageMode === "turkish" ? "tr-TR" : "en-US";
     recognition.onstart = () => {
       setTranscript("");
-      setMood("listening");
-    };
-    recognition.onerror = (event) => {
-      setMood("idle");
-      addBuddyLine(
-        event.error === "not-allowed"
-          ? "Microphone permission is closed. Please allow the microphone and try again."
-          : "I could not hear that clearly. Let's try again.",
-      );
+      setEngineState("listening");
     };
     recognition.onend = () => {
-      if (mood === "listening") setMood("idle");
+      setEngineState((state) => (state === "listening" ? "ready" : state));
+    };
+    recognition.onerror = (event) => {
+      setEngineState("ready");
+      const text =
+        event.error === "not-allowed"
+          ? "Microphone permission is blocked. Please allow microphone access."
+          : "I could not hear that clearly. Please try again.";
+      setMessages((current) => [...current.slice(-7), { role: "assistant", text, lang: "en" }]);
+      speak(text);
     };
     recognition.onresult = (event) => {
       let text = "";
       for (let index = 0; index < event.results.length; index += 1) {
         text += event.results[index][0].transcript;
       }
-      setTranscript(normalize(text));
 
+      setTranscript(normalize(text));
       const finalResult = event.results[event.results.length - 1];
       if (finalResult?.isFinal) {
         recognition.stop();
-        handleTranscript(text);
+        handleFinalTranscript(text);
       }
     };
     recognition.start();
   }
 
-  function nextQuest() {
-    const sceneQuests = quests.filter((quest) => quest.scene === scene);
-    const nextIndex = (questIndex + 1) % sceneQuests.length;
-    setQuestIndex(nextIndex);
-    const next = sceneQuests[nextIndex];
-    const prompt = next?.pattern ?? currentQuest.pattern;
-    addBuddyLine("New quest! Try this: " + prompt);
+  function stopListening() {
+    recognitionRef.current?.stop();
+    setEngineState("ready");
+  }
+
+  function startSession() {
+    const prompt = currentPrompt;
+    setMessages((current) => [...current.slice(-7), { role: "assistant", text: prompt, lang: "en" }]);
+    speak(prompt);
   }
 
   return (
-    <main className="toy-shell">
-      <section className="hero-band">
-        <div className="hero-copy">
-          <p className="eyebrow">English Mate</p>
-          <h1>Speak, play, repeat.</h1>
-          <p>
-            A mobile-first language toy for English practice, with Turkish help when
-            a child gets stuck.
-          </p>
-        </div>
-
-        <div className={`buddy-face ${mood}`} aria-label={`Buddy is ${mood}`}>
-          <span className="ear left" />
-          <span className="ear right" />
-          <span className="eye left" />
-          <span className="eye right" />
-          <span className="cheek left" />
-          <span className="cheek right" />
-          <span className="mouth" />
-        </div>
-      </section>
-
-      <section className="play-surface" aria-label="Language toy">
-        <div className="quest-panel">
+    <main className="app-shell">
+      <section className="conversation-panel" aria-label="Voice practice engine">
+        <header className="session-header">
           <div>
-            <p className="panel-label">Today&apos;s quest</p>
-            <h2>{currentQuest.title}</h2>
-            <p className="quest-prompt">{currentQuest.prompt}</p>
+            <p>English Mate</p>
+            <h1>Voice practice engine</h1>
           </div>
+          <span className={`engine-pill ${engineState}`}>{engineState}</span>
+        </header>
 
-          <div className="picture-stage" aria-label="Practice picture">
-            <div className={`scene-art ${currentQuest.scene}`}>
-              <span className="sun" />
-              <span className="ground" />
-              <span className="main-shape" />
-              <span className="small-shape one" />
-              <span className="small-shape two" />
-            </div>
-          </div>
-
-          <div className="pattern-box">
-            <span>Try saying</span>
-            <strong>{currentQuest.pattern}</strong>
-          </div>
-
-          <div className="word-row" aria-label="Target words">
-            {currentQuest.words.map((word) => (
-              <button key={word} type="button" onClick={() => speak(word)}>
-                {word}
-              </button>
-            ))}
-          </div>
+        <div className="prompt-box">
+          <span>Current prompt</span>
+          <strong>{currentPrompt}</strong>
         </div>
 
-        <div className="talk-panel">
-          <div className="status-row">
-            <span className={`status-dot ${mood}`} />
-            <span>
-              {mood === "listening"
-                ? "Listening"
-                : mood === "thinking"
-                  ? "Thinking"
-                  : mood === "speaking"
-                    ? "Speaking"
-                    : mood === "celebrate"
-                      ? "Nice work"
-                      : "Ready"}
-            </span>
-          </div>
-
-          <button className="talk-button" type="button" onClick={startListening}>
-            <span className="mic-mark" aria-hidden="true" />
-            <span>{mood === "listening" ? "Listening..." : "Hold or tap to talk"}</span>
+        <div className="voice-controls">
+          <button
+            className="primary-talk"
+            type="button"
+            onClick={engineState === "listening" ? stopListening : startListening}
+          >
+            <span className="mic-icon" aria-hidden="true" />
+            {engineState === "listening" ? "Stop listening" : "Start listening"}
           </button>
-
-          <div className="mode-row" aria-label="Listening language">
+          <div className="control-row" aria-label="Recognition language">
             <button
               type="button"
-              className={listenMode === "english" ? "active" : ""}
-              onClick={() => setListenMode("english")}
+              className={languageMode === "english" ? "selected" : ""}
+              onClick={() => setLanguageMode("english")}
             >
-              English
+              Listen in English
             </button>
             <button
               type="button"
-              className={listenMode === "turkish" ? "active" : ""}
-              onClick={() => setListenMode("turkish")}
+              className={languageMode === "turkish" ? "selected" : ""}
+              onClick={() => setLanguageMode("turkish")}
             >
-              Turkish help
+              Listen in Turkish
             </button>
           </div>
-
-          <div className="transcript-box">
-            <span>Heard</span>
-            <p>{transcript || "Nothing yet."}</p>
-          </div>
-
-          <div className="reply-box">
-            <span>Buddy says</span>
-            <p>{lastReply}</p>
-          </div>
-
-          <div className="action-row">
-            <button type="button" onClick={() => speak(lastReply, looksTurkish(lastReply) ? "tr" : "en")}>
-              Replay
-            </button>
-            <button type="button" onClick={nextQuest}>
-              New quest
-            </button>
-          </div>
-
-          {!speechSupported && (
-            <p className="support-note">
-              This browser does not expose speech recognition. The app still works
-              as a clickable practice board.
-            </p>
-          )}
         </div>
+
+        <div className="live-text">
+          <div>
+            <span>Heard from child</span>
+            <p>{transcript || "No speech captured yet."}</p>
+          </div>
+          <div>
+            <span>Assistant response</span>
+            <p>{assistantReply?.text}</p>
+          </div>
+        </div>
+
+        <div className="secondary-actions">
+          <button type="button" onClick={startSession}>
+            Read prompt
+          </button>
+          <button
+            type="button"
+            onClick={() => assistantReply && speak(assistantReply.text, assistantReply.lang)}
+          >
+            Replay response
+          </button>
+        </div>
+
+        {!speechSupported && (
+          <p className="browser-note">
+            This browser does not expose speech recognition. Use Chrome or Safari
+            for the microphone prototype.
+          </p>
+        )}
       </section>
 
-      <section className="parent-strip" aria-label="Parent controls">
-        <div className="control-group">
+      <aside className="parent-panel" aria-label="Parent panel">
+        <header>
+          <p>Parent panel</p>
+          <h2>Session settings</h2>
+        </header>
+
+        <label className="field">
+          <span>Child label</span>
+          <input
+            value={settings.childName}
+            onChange={(event) => updateSettings({ childName: event.target.value })}
+          />
+        </label>
+
+        <div className="field">
           <span>Level</span>
           <div className="segmented">
-            {(Object.keys(levelCopy) as Level[]).map((item) => (
+            {(Object.keys(levelLabels) as Level[]).map((level) => (
               <button
-                key={item}
+                key={level}
                 type="button"
-                className={level === item ? "active" : ""}
-                onClick={() => setLevel(item)}
+                className={settings.level === level ? "selected" : ""}
+                onClick={() => updateSettings({ level })}
               >
-                {levelCopy[item].label}
+                {levelLabels[level]}
               </button>
             ))}
           </div>
-          <small>{levelCopy[level].sentence}</small>
         </div>
 
-        <div className="control-group">
-          <span>World</span>
+        <div className="field">
+          <span>Topic</span>
+          <select
+            value={settings.topic}
+            onChange={(event) => updateSettings({ topic: event.target.value as Topic })}
+          >
+            {(Object.keys(topicLabels) as Topic[]).map((topic) => (
+              <option key={topic} value={topic}>
+                {topicLabels[topic]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="field">
+          <span>Correction style</span>
           <div className="segmented">
-            {(Object.keys(sceneLabels) as Scene[]).map((item) => (
+            {(Object.keys(correctionLabels) as CorrectionStyle[]).map((style) => (
               <button
-                key={item}
+                key={style}
                 type="button"
-                className={scene === item ? "active" : ""}
-                onClick={() => {
-                  setScene(item);
-                  setQuestIndex(0);
-                }}
+                className={settings.correctionStyle === style ? "selected" : ""}
+                onClick={() => updateSettings({ correctionStyle: style })}
               >
-                {sceneLabels[item]}
+                {correctionLabels[style]}
               </button>
             ))}
           </div>
-          <small>Target words change with the world.</small>
         </div>
 
-        <label className="bridge-toggle">
+        <label className="switch-row">
           <input
             type="checkbox"
-            checked={turkishBridge}
-            onChange={(event) => setTurkishBridge(event.target.checked)}
+            checked={settings.turkishBridge}
+            onChange={(event) => updateSettings({ turkishBridge: event.target.checked })}
           />
           <span />
           Turkish bridge
         </label>
-      </section>
 
-      <section className="history-log" aria-label="Short conversation history">
-        {chat.slice(-4).map((line, index) => (
-          <p key={`${line.by}-${index}`} className={line.by}>
-            <span>{line.by === "child" ? "Child" : "Buddy"}</span>
-            {line.text}
-          </p>
+        <div className="engine-plan">
+          <h3>Next engine layer</h3>
+          <ol>
+            <li>Browser captures child speech.</li>
+            <li>Backend transcribes and detects Turkish help.</li>
+            <li>AI coach returns one short spoken correction.</li>
+            <li>Phone and physical toy use the same endpoint.</li>
+          </ol>
+        </div>
+      </aside>
+
+      <section className="history-panel" aria-label="Conversation history">
+        {messages.map((message, index) => (
+          <article key={`${message.role}-${index}`} className={message.role}>
+            <span>{message.role === "child" ? settings.childName || "Child" : "Assistant"}</span>
+            <p>{message.text}</p>
+          </article>
         ))}
       </section>
     </main>
