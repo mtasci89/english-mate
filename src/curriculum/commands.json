@@ -1,0 +1,18 @@
+[
+  { "key": "nose", "en": "Touch your nose.", "tr": "Burnuna dokun.", "visual": "👃" },
+  { "key": "clap", "en": "Clap your hands.", "tr": "Ellerini çırp.", "visual": "👏" },
+  { "key": "jump", "en": "Jump two times.", "tr": "İki kez zıpla.", "visual": "🦘" },
+  { "key": "turn", "en": "Turn around.", "tr": "Kendi etrafında dön.", "visual": "🔄" },
+  { "key": "head", "en": "Touch your head.", "tr": "Başına dokun.", "visual": "🧢" },
+  { "key": "standup", "en": "Stand up.", "tr": "Ayağa kalk.", "visual": "🧍" },
+  { "key": "sitdown", "en": "Sit down.", "tr": "Otur.", "visual": "🪑" },
+  { "key": "wave", "en": "Wave your hand.", "tr": "Elini salla.", "visual": "👋" },
+  { "key": "eyes", "en": "Close your eyes.", "tr": "Gözlerini kapat.", "visual": "🙈" },
+  { "key": "ears", "en": "Touch your ears.", "tr": "Kulaklarına dokun.", "visual": "👂" },
+  { "key": "stomp", "en": "Stomp your feet.", "tr": "Ayaklarını yere vur.", "visual": "🦶" },
+  { "key": "knees", "en": "Touch your knees.", "tr": "Dizlerine dokun.", "visual": "🦵" },
+  { "key": "arms", "en": "Raise your arms.", "tr": "Kollarını kaldır.", "visual": "🙌" },
+  { "key": "smile", "en": "Show me a big smile.", "tr": "Kocaman gülümse.", "visual": "😄" },
+  { "key": "hop", "en": "Hop on one foot.", "tr": "Tek ayak üstünde sek.", "visual": "🕺" },
+  { "key": "tummy", "en": "Pat your tummy.", "tr": "Karnına hafifçe vur.", "visual": "🤰" }
+]

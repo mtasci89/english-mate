@@ -62,6 +62,38 @@ function extractText(data) {
   );
 }
 
+/**
+ * Drops a trailing half-sentence when generation stopped at the token cap.
+ * Speaking a sentence that ends mid-word is worse than saying slightly less.
+ */
+function trimToCompleteSentence(text, finishReason) {
+  if (finishReason !== "MAX_TOKENS") return text;
+
+  const lastBreak = Math.max(text.lastIndexOf("."), text.lastIndexOf("!"), text.lastIndexOf("?"));
+  return lastBreak > 20 ? text.slice(0, lastBreak + 1) : text;
+}
+
+const TURKISH_HINTS =
+  /\b(bir|bu|ve|için|çok|nasıl|ne|değil|var|yok|şey|iyi|güzel|evet|hayır|şimdi|sonra|demek|söyle)\b/gi;
+
+/**
+ * Picks the voice for the whole reply.
+ *
+ * Deciding by "contains a Turkish letter" made a fully English sentence holding
+ * one Turkish word get read start to finish by the Turkish voice. The reply is
+ * called Turkish only when Turkish markers dominate, and ties go to English —
+ * the language being taught, and the far less jarring wrong guess.
+ */
+function detectLanguage(text) {
+  const words = text.split(/\s+/).filter(Boolean);
+  if (!words.length) return "en";
+
+  const diacritics = (text.match(/[çğıöşüÇĞİÖŞÜ]/g) || []).length;
+  const hints = (text.match(TURKISH_HINTS) || []).length;
+
+  return (diacritics + hints * 2) / words.length > 0.5 ? "tr" : "en";
+}
+
 export async function handler(event) {
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers, body: "" };
@@ -99,7 +131,7 @@ export async function handler(event) {
     generationConfig: {
       temperature: 0.75,
       topP: 0.9,
-      maxOutputTokens: 90,
+      maxOutputTokens: 120,
     },
   };
 
@@ -121,7 +153,8 @@ export async function handler(event) {
   }
 
   const data = await response.json();
-  const text = extractText(data);
+  const finishReason = data?.candidates?.[0]?.finishReason;
+  const text = trimToCompleteSentence(extractText(data), finishReason);
 
   if (!text) {
     return json(502, {
@@ -129,5 +162,5 @@ export async function handler(event) {
     });
   }
 
-  return json(200, { text, lang: /[çğıöşü]/i.test(text) ? "tr" : "en" });
+  return json(200, { text, lang: detectLanguage(text) });
 }

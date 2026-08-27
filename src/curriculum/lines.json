@@ -1,0 +1,35 @@
+{
+  "moveIntro": { "key": "line-move-intro", "text": "Let's move! Listen and do it." },
+  "nameIntro": { "key": "line-name-intro", "text": "Look at the picture. Tell me what it is." },
+  "askWhat": [
+    { "key": "line-ask-1", "text": "What is this?" },
+    { "key": "line-ask-2", "text": "And this one?" },
+    { "key": "line-ask-3", "text": "Tell me this one." }
+  ],
+  "praise": [
+    { "key": "line-praise-1", "text": "Perfect!" },
+    { "key": "line-praise-2", "text": "Yes! Well done." },
+    { "key": "line-praise-3", "text": "That's it!" },
+    { "key": "line-praise-4", "text": "Very good!" }
+  ],
+  "close": [
+    { "key": "line-close-1", "text": "So close! One more time." },
+    { "key": "line-close-2", "text": "Almost! Try again." }
+  ],
+  "listening": [
+    { "key": "line-listening-1", "text": "I'm listening. Take your time." },
+    { "key": "line-listening-2", "text": "Go ahead, I'm here." }
+  ],
+  "modelListen": { "key": "line-model-listen", "text": "Listen." },
+  "modelNowYou": { "key": "line-model-nowyou", "text": "Now you." },
+  "moveOn": [
+    { "key": "line-moveon-1", "text": "Good trying! Let's look at another one." },
+    { "key": "line-moveon-2", "text": "Nice effort. Here comes a new one." }
+  ],
+  "actionDone": [
+    { "key": "line-done-1", "text": "Great! You did it." },
+    { "key": "line-done-2", "text": "Yes! Nice moving." },
+    { "key": "line-done-3", "text": "Well done!" }
+  ],
+  "sessionEnd": { "key": "line-session-end", "text": "That was a great round. See you next time!" }
+}

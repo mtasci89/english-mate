@@ -49,50 +49,23 @@ button {
   touch-action: manipulation;
 }
 
+/* One screen at a time: a tablet in a child's hands, not a dashboard. */
 .app-shell {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 390px);
-  grid-template-areas:
-    "conversation parent"
-    "history parent";
-  gap: 18px;
-  width: min(1180px, calc(100% - 32px));
+  display: block;
+  width: min(720px, calc(100% - 24px));
   min-height: 100vh;
   margin: 0 auto;
-  padding: 24px 0;
+  padding: 16px 0 28px;
 }
 
-.conversation-panel,
-.parent-panel,
-.history-panel {
+.parent-panel {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.94);
   box-shadow: var(--shadow);
-}
-
-.conversation-panel {
-  grid-area: conversation;
-  display: grid;
-  gap: 18px;
-  padding: 22px;
-}
-
-.parent-panel {
-  grid-area: parent;
-  align-self: start;
-  display: grid;
-  gap: 18px;
-  padding: 20px;
-  position: sticky;
-  top: 18px;
-}
-
-.history-panel {
-  grid-area: history;
-  display: grid;
-  gap: 10px;
-  padding: 16px;
 }
 
 .session-header,
@@ -451,5 +424,220 @@ h3 {
   .history-panel article {
     grid-template-columns: 1fr;
     gap: 4px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Home, game and progress screens.
+
+   Sized for a tablet held by a six-year-old: one decision per screen, targets
+   big enough for imprecise fingers, and no text the child has to read to play.
+   --------------------------------------------------------------------------- */
+
+.home-screen,
+.game-screen {
+  display: grid;
+  gap: 18px;
+}
+
+.home-header,
+.game-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.home-header p {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.home-header h1 {
+  font-size: clamp(1.6rem, 4.4vw, 2.4rem);
+}
+
+.ghost-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 16px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.ghost-button:disabled {
+  opacity: 0.45;
+}
+
+.game-cards {
+  display: grid;
+  gap: 14px;
+}
+
+.game-card {
+  display: grid;
+  gap: 4px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.game-card:active {
+  transform: translateY(1px);
+}
+
+.game-card-visual {
+  font-size: 2.6rem;
+  line-height: 1.1;
+}
+
+.game-card-step {
+  color: var(--blue);
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.game-card strong {
+  font-size: 1.25rem;
+  font-weight: 850;
+}
+
+.game-card-blurb {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
+.round-counter {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.game-stage,
+.round-done {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.game-visual {
+  font-size: clamp(5rem, 22vw, 8rem);
+  line-height: 1;
+}
+
+.game-prompt {
+  margin: 0;
+  font-size: clamp(1.3rem, 4.5vw, 1.9rem);
+  font-weight: 800;
+}
+
+.round-done p {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 850;
+}
+
+/* Hold to talk: the child ends the turn by letting go, so a pause mid-sentence
+   never cuts them off. */
+.talk-button,
+.action-button {
+  min-height: 92px;
+  font-size: 1.25rem;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.talk-button.active {
+  background: var(--green);
+  box-shadow: 0 0 0 6px rgba(24, 128, 95, 0.18);
+}
+
+.primary-talk:disabled {
+  opacity: 0.5;
+}
+
+.heard-line {
+  min-height: 1.4em;
+  margin: 0;
+  color: var(--muted);
+  font-size: 1rem;
+  text-align: center;
+}
+
+.helper-row {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* The Turkish lifeline is deliberately quieter than the talk button: available
+   when needed, never the obvious thing to press. */
+.lifeline-button {
+  border: 1px dashed var(--amber);
+  border-radius: 999px;
+  padding: 9px 18px;
+  background: rgba(255, 248, 235, 0.9);
+  color: var(--amber);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.lifeline-button:disabled {
+  opacity: 0.45;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.stat {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-soft);
+}
+
+.stat span {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.stat strong {
+  font-size: 1.5rem;
+  font-weight: 850;
+}
+
+.engine-plan p {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+@media (min-width: 720px) {
+  .game-cards {
+    grid-template-columns: repeat(3, 1fr);
   }
 }

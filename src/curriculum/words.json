@@ -1,0 +1,22 @@
+[
+  { "key": "cat", "en": "cat", "tr": "kedi", "unit": "animals", "visual": "🐱", "distractors": ["dog", "cow", "duck"] },
+  { "key": "dog", "en": "dog", "tr": "köpek", "unit": "animals", "visual": "🐶", "distractors": ["duck", "cat", "frog"] },
+  { "key": "bird", "en": "bird", "tr": "kuş", "unit": "animals", "visual": "🐦", "distractors": ["bear", "fish", "horse"] },
+  { "key": "fish", "en": "fish", "tr": "balık", "unit": "animals", "visual": "🐟", "distractors": ["sheep", "bird", "frog"] },
+  { "key": "horse", "en": "horse", "tr": "at", "unit": "animals", "visual": "🐴", "distractors": ["house", "cow", "bear"] },
+  { "key": "cow", "en": "cow", "tr": "inek", "unit": "animals", "visual": "🐮", "distractors": ["cat", "duck", "horse"] },
+  { "key": "sheep", "en": "sheep", "tr": "koyun", "unit": "animals", "visual": "🐑", "distractors": ["ship", "fish", "bird"] },
+  { "key": "duck", "en": "duck", "tr": "ördek", "unit": "animals", "visual": "🦆", "distractors": ["dog", "cow", "cat"] },
+  { "key": "bear", "en": "bear", "tr": "ayı", "unit": "animals", "visual": "🐻", "distractors": ["bird", "hair", "horse"] },
+  { "key": "rabbit", "en": "rabbit", "tr": "tavşan", "unit": "animals", "visual": "🐰", "distractors": ["robot", "bird", "bear"] },
+  { "key": "lion", "en": "lion", "tr": "aslan", "unit": "animals", "visual": "🦁", "distractors": ["line", "bird", "frog"] },
+  { "key": "frog", "en": "frog", "tr": "kurbağa", "unit": "animals", "visual": "🐸", "distractors": ["dog", "fish", "duck"] },
+  { "key": "red", "en": "red", "tr": "kırmızı", "unit": "colors", "visual": "🔴", "distractors": ["bread", "black", "green"] },
+  { "key": "blue", "en": "blue", "tr": "mavi", "unit": "colors", "visual": "🔵", "distractors": ["black", "green", "purple"] },
+  { "key": "green", "en": "green", "tr": "yeşil", "unit": "colors", "visual": "🟢", "distractors": ["red", "blue", "orange"] },
+  { "key": "yellow", "en": "yellow", "tr": "sarı", "unit": "colors", "visual": "🟡", "distractors": ["orange", "purple", "white"] },
+  { "key": "black", "en": "black", "tr": "siyah", "unit": "colors", "visual": "⚫", "distractors": ["blue", "white", "red"] },
+  { "key": "white", "en": "white", "tr": "beyaz", "unit": "colors", "visual": "⚪", "distractors": ["black", "yellow", "blue"] },
+  { "key": "orange", "en": "orange", "tr": "turuncu", "unit": "colors", "visual": "🟠", "distractors": ["yellow", "green", "purple"] },
+  { "key": "purple", "en": "purple", "tr": "mor", "unit": "colors", "visual": "🟣", "distractors": ["orange", "blue", "yellow"] }
+]
