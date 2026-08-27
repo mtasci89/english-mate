@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build:netlify"
+  publish = "netlify-dist"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Permissions-Policy = "microphone=(self)"
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"

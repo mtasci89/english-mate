@@ -7,9 +7,11 @@
   },
   "scripts": {
     "dev": "vinext dev",
+    "dev:netlify": "vite --config vite.netlify.config.ts",
     "build": "vinext build",
+    "build:netlify": "vite build --config vite.netlify.config.ts",
     "start": "vinext start",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern netlify-dist --ignore-pattern .next"
   },
   "dependencies": {
     "next": "16.2.6",
