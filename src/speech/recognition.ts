@@ -64,10 +64,13 @@ export type Recognizer = {
  * not a mistake, and the toy must never react to it as one.
  */
 export function createRecognizer(options: RecognizerOptions): Recognizer {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRecognition) {
+  const availableConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!availableConstructor) {
     return { start: () => options.onFinal(""), stop: () => {}, cancel: () => {} };
   }
+  // Bind to a non-optional local so the nested `start()` closure below does
+  // not re-widen this back to `SpeechRecognitionConstructor | undefined`.
+  const SpeechRecognition: SpeechRecognitionConstructor = availableConstructor;
 
   let instance: SpeechRecognitionInstance | null = null;
   let finalText = "";

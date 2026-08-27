@@ -11,6 +11,11 @@
   to = "/.netlify/functions/chat"
   status = 200
 
+[[redirects]]
+  from = "/api/attempts"
+  to = "/.netlify/functions/attempts"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

@@ -9,10 +9,13 @@
     "dev": "vite",
     "build": "vite build",
     "build:netlify": "vite build",
+    "build:audio": "node scripts/build-audio.mjs",
     "preview": "vite preview",
-    "lint": "tsc --noEmit && node --check netlify/functions/chat.mjs"
+    "test": "vitest run",
+    "lint": "tsc --noEmit && node --check netlify/functions/chat.mjs && node --check netlify/functions/attempts.mjs && node --check scripts/build-audio.mjs"
   },
   "dependencies": {
+    "@netlify/blobs": "^8.1.0",
     "react": "19.2.6",
     "react-dom": "19.2.6"
   },
@@ -24,7 +27,8 @@
     "@vitejs/plugin-react": "6.0.2",
     "tailwindcss": "4.2.1",
     "typescript": "5.9.3",
-    "vite": "8.0.13"
+    "vite": "8.0.13",
+    "vitest": "^4.1.11"
   },
   "type": "module"
 }
