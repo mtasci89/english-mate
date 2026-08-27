@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { loadVoices, turkishVoiceAvailable } from "../audio/player";
 import { wordKeys } from "../curriculum";
 import { progressSummary } from "../curriculum/srs";
 import { correctionLabels, levelLabels, topicLabels } from "../settings";
@@ -18,12 +19,16 @@ function percent(value: number) {
 
 export function ParentPanel({ settings, onChange, onExit }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [turkishVoice, setTurkishVoice] = useState(true);
   const vocabulary = progressSummary(wordKeys);
 
   useEffect(() => {
     let cancelled = false;
     void fetchSummary(7).then((result) => {
       if (!cancelled) setSummary(result);
+    });
+    void loadVoices().then(() => {
+      if (!cancelled) setTurkishVoice(turkishVoiceAvailable());
     });
     return () => {
       cancelled = true;
@@ -75,6 +80,15 @@ export function ParentPanel({ settings, onChange, onExit }: Props) {
           <strong>{vocabulary.known}</strong>
         </div>
       </div>
+
+      {!turkishVoice && (
+        <p className="browser-note">
+          This device has no Turkish voice installed, so the Turkish lifeline is
+          read with an English voice. It is still shown on screen. Adding a
+          Turkish system voice in the device's speech settings fixes the
+          pronunciation.
+        </p>
+      )}
 
       {summary?.source === "local" && (
         <p className="browser-note">

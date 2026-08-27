@@ -39,6 +39,9 @@ export function GameScreen({ gameId, onExit }: Props) {
   const [completed, setCompleted] = useState(0);
   const [micDenied, setMicDenied] = useState(false);
   const [finished, setFinished] = useState(false);
+  // Shown as well as spoken: a device with no Turkish voice would otherwise
+  // give the child nothing at all, and a parent nearby can read it out.
+  const [lifelineText, setLifelineText] = useState<string | null>(null);
 
   // Async speech callbacks outlive the render that created them, so the live
   // turn context is held in refs rather than read from a stale closure.
@@ -68,6 +71,7 @@ export function GameScreen({ gameId, onExit }: Props) {
 
     setTurn(next);
     setTranscript("");
+    setLifelineText(null);
     preload([next.prompt, next.englishRepeat]);
     await speakAll([next.prompt]);
   }, [gameId, speakAll]);
@@ -201,6 +205,7 @@ export function GameScreen({ gameId, onExit }: Props) {
 
     lifelineRef.current = true;
     recognizerRef.current?.cancel();
+    setLifelineText(current.trHelp);
     await speakAll(lifelineFor(current));
   }
 
@@ -265,6 +270,8 @@ export function GameScreen({ gameId, onExit }: Props) {
               {engineState === "listening" ? "Keep talking…" : "Hold and say it"}
             </button>
           )}
+
+          {lifelineText && <p className="lifeline-text">{lifelineText}</p>}
 
           <p className="heard-line">{transcript || " "}</p>
 

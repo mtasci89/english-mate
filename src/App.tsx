@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { loadManifest } from "./audio/player";
+import { loadManifest, loadVoices } from "./audio/player";
 import { ChatScreen } from "./components/ChatScreen";
 import { GameScreen } from "./components/GameScreen";
 import { HomeScreen } from "./components/HomeScreen";
@@ -14,9 +14,12 @@ export function App() {
   const [settings, setSettings] = useState<Settings>(() => readSettings());
   const [screen, setScreen] = useState<Screen>({ name: "home" });
 
-  // Pulled in early so the first prompt of the first game plays from cache.
+  // Both pulled in early: the manifest so the first prompt plays from cache,
+  // the voice list because the browser populates it asynchronously and an
+  // unloaded list is what makes the first utterance come out silent.
   useEffect(() => {
     void loadManifest();
+    void loadVoices();
   }, []);
 
   function updateSettings(next: Partial<Settings>) {

@@ -62,6 +62,84 @@ export function cancelSpeech() {
   if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 }
 
+/*
+ * Browser voice fallback.
+ *
+ * Setting `utterance.lang` alone is not enough: if the device has no voice
+ * installed for that language, the browser will happily accept the utterance
+ * and say nothing at all. That is why Turkish came out silent on a device with
+ * no Turkish voice. A voice is now always picked explicitly, and when the
+ * requested language has none we deliberately speak with whatever voice exists
+ * rather than going quiet — a heavily accented sentence still reaches the child
+ * and the parent sitting next to them, silence does not.
+ */
+
+/** Slow enough for a beginner to catch each word; adult conversation pace is not. */
+const RATE_EN = 0.72;
+/** The language the child already has: normal pace, not patronising. */
+const RATE_TR = 0.95;
+
+/** Names that usually indicate a neural voice rather than the old robotic one. */
+const QUALITY_HINTS = ["natural", "neural", "enhanced", "premium", "google", "siri"];
+
+let voices: SpeechSynthesisVoice[] = [];
+let voicesLoad: Promise<void> | null = null;
+
+export function loadVoices(): Promise<void> {
+  if (voicesLoad) return voicesLoad;
+
+  voicesLoad = new Promise((resolve) => {
+    if (!("speechSynthesis" in window)) {
+      resolve();
+      return;
+    }
+
+    const read = () => {
+      voices = window.speechSynthesis.getVoices();
+      return voices.length > 0;
+    };
+
+    if (read()) {
+      resolve();
+      return;
+    }
+
+    // Chrome populates the list asynchronously, after `voiceschanged`.
+    const onChanged = () => {
+      read();
+      window.speechSynthesis.removeEventListener("voiceschanged", onChanged);
+      resolve();
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onChanged);
+    window.setTimeout(() => {
+      read();
+      resolve();
+    }, 1500);
+  });
+
+  return voicesLoad;
+}
+
+function score(voice: SpeechSynthesisVoice) {
+  const name = voice.name.toLowerCase();
+  let value = QUALITY_HINTS.some((hint) => name.includes(hint)) ? 2 : 0;
+  if (voice.localService) value += 1;
+  return value;
+}
+
+function pickVoice(lang: "en" | "tr") {
+  const prefix = lang === "tr" ? "tr" : "en";
+  const matching = voices.filter((voice) => voice.lang.toLowerCase().startsWith(prefix));
+  if (!matching.length) return null;
+
+  return matching.reduce((best, voice) => (score(voice) > score(best) ? voice : best));
+}
+
+/** Surfaced in the parent panel so a missing Turkish voice reads as a device gap, not a bug. */
+export function turkishVoiceAvailable() {
+  return pickVoice("tr") !== null;
+}
+
 function speakWithBrowserVoice(speakable: Speakable, onEnd: () => void) {
   if (!("speechSynthesis" in window)) {
     onEnd();
@@ -69,9 +147,20 @@ function speakWithBrowserVoice(speakable: Speakable, onEnd: () => void) {
   }
 
   const utterance = new SpeechSynthesisUtterance(speakable.text);
-  utterance.lang = speakable.lang === "tr" ? "tr-TR" : "en-US";
-  // Slower in English: this is the language being learned, not the one already known.
-  utterance.rate = speakable.lang === "tr" ? 0.95 : 0.82;
+  const preferred = pickVoice(speakable.lang);
+
+  if (preferred) {
+    utterance.voice = preferred;
+    utterance.lang = preferred.lang;
+  } else {
+    // No voice for this language on this device. Fall back to any voice at all
+    // rather than letting the utterance play silently.
+    const anyVoice = pickVoice("en") ?? voices[0] ?? null;
+    if (anyVoice) utterance.voice = anyVoice;
+    if (anyVoice) utterance.lang = anyVoice.lang;
+  }
+
+  utterance.rate = speakable.rate ?? (speakable.lang === "tr" ? RATE_TR : RATE_EN);
   utterance.pitch = 1.02;
   utterance.onend = onEnd;
   utterance.onerror = onEnd;

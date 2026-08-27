@@ -102,11 +102,13 @@ export function feedbackForSpeech(
     };
   }
 
-  // Tier three: model the word, then hand the turn back.
+  // Tier three: model the word, then hand the turn back. The word itself is
+  // said slower still — this is the one moment the child is being asked to
+  // copy a sound exactly, so clarity beats naturalness.
   return {
     speakables: [
       line(lines.modelListen),
-      { text: word.en, lang: "en", audioKey: audioKeys.wordEn(word.key) },
+      { text: word.en, lang: "en", audioKey: audioKeys.wordEn(word.key), rate: 0.6 },
       line(lines.modelNowYou),
     ],
     advance: false,

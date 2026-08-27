@@ -29,6 +29,8 @@ export type Speakable = {
   text: string;
   lang: "en" | "tr";
   audioKey?: string;
+  /** Overrides the default browser-voice pace, e.g. a word being modelled. */
+  rate?: number;
 };
 
 /** What the child is expected to do in response to a prompt. */

@@ -531,3 +531,17 @@ h3 {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* The Turkish explanation is shown as well as spoken, so a device with no
+   Turkish voice still gives the child (and the parent beside them) the help. */
+.lifeline-text {
+  margin: 0;
+  border-left: 4px solid var(--amber);
+  padding: 10px 14px;
+  border-radius: 0 10px 10px 0;
+  background: #fff8ea;
+  color: #704400;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.45;
+}

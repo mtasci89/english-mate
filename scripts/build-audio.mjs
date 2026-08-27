@@ -41,8 +41,36 @@ const TTS_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${
 // One fixed voice per language. Keep these constant across runs: the child
 // hears the same two "characters" every session, and changing a name here
 // changes the voice the next time audio is (re)built.
-const VOICE_EN = "Kore";
-const VOICE_TR = "Puck";
+//
+// "Leda" is the youthful voice — a companion nearer the child's own age reads
+// better here than an authoritative one. Turkish keeps a separate, warmer voice
+// so the switch into the lifeline is audible: the helper stepping in should not
+// sound like the English the child is here to practise.
+const VOICE_EN = "Leda";
+const VOICE_TR = "Sulafat";
+
+/*
+ * Delivery instructions.
+ *
+ * Voice choice alone does not fix pace, and pace is the thing that makes a
+ * beginner able to follow at all. Gemini TTS takes a natural-language style
+ * lead before the content and does not read that lead aloud — that is how the
+ * English lines get the slow, over-articulated delivery of an adult reading a
+ * picture book, rather than the speed of adult conversation.
+ *
+ * Turkish is the language the child already has, so it stays at a normal calm
+ * pace; slowing it down would sound patronising instead of clear.
+ */
+const STYLE_EN =
+  "Read the following slowly and very clearly, with a small pause between " +
+  "words, in the warm and encouraging voice of a friendly teacher speaking to " +
+  "a six-year-old who is just beginning to learn English. Gently " +
+  "over-pronounce each word instead of speaking at natural conversational " +
+  "speed.";
+
+const STYLE_TR =
+  "Bunu sakin, sıcak ve net bir sesle, bir çocuğa bir şeyi açıklar gibi, " +
+  "normal konuşma hızında oku.";
 
 const FORCE = process.argv.includes("--force");
 
@@ -192,12 +220,14 @@ function wavToMp3(wavBuffer) {
 
 async function synthesize(text, lang, apiKey) {
   const voiceName = lang === "tr" ? VOICE_TR : VOICE_EN;
+  const style = lang === "tr" ? STYLE_TR : STYLE_EN;
+  const styledPrompt = `${style}\n\n${text}`;
 
   const response = await fetch(`${TTS_ENDPOINT}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      contents: [{ parts: [{ text }] }],
+      contents: [{ parts: [{ text: styledPrompt }] }],
       generationConfig: {
         responseModalities: ["AUDIO"],
         speechConfig: {
