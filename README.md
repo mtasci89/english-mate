@@ -99,13 +99,23 @@ on-the-fly synthesis, so that they can honor "no network call at runtime."
   wav, roughly ten times larger but equally playable. The manifest records
   which, and the player follows it, so nothing in the app needs editing either
   way.
-- **Two engines.** `--engine=gemini` (default) needs `GEMINI_API_KEY`; the free
-  tier allows **ten TTS requests per day**, which cannot build this catalogue in
-  one sitting — a daily refusal aborts the run rather than retrying for hours.
-  `--engine=say` uses the local macOS synthesiser: no key, no quota, no network,
-  whole catalogue in seconds. Override its voices with `SAY_VOICE_EN` /
-  `SAY_VOICE_TR` and its pace (words per minute) with `SAY_RATE_EN` /
-  `SAY_RATE_TR`; `say -v '?'` lists what the machine has.
+- **Three engines**, chosen with `--engine=`:
+  - **`gcloud`** (default) — Google Cloud Text-to-Speech, Chirp 3 HD voices,
+    `GOOGLE_TTS_API_KEY` (or `GEMINI_API_KEY`, if one Cloud key has both APIs
+    enabled). Metered per character with a free monthly allowance, and this
+    whole catalogue is under 2,000 characters, so a full rebuild costs a
+    fraction of a cent. Returns mp3 directly, so ffmpeg is never needed here.
+    Voices: `GCLOUD_VOICE_EN` / `GCLOUD_VOICE_TR`; pace: `GCLOUD_RATE_EN` /
+    `GCLOUD_RATE_TR` (1.0 is conversational, English defaults to 0.8).
+  - **`gemini`** — same voice family through the Gemini API, but its free tier
+    meters **ten requests per day**, which cannot build a hundred-odd files in
+    one sitting; a daily refusal aborts the run rather than retrying for hours.
+    Kept because its style prompt allows delivery instructions Cloud TTS has no
+    equivalent for.
+  - **`say`** — local macOS synthesiser: no key, no quota, no network, whole
+    catalogue in seconds, but noticeably more mechanical. `SAY_VOICE_EN` /
+    `SAY_VOICE_TR` and `SAY_RATE_EN` / `SAY_RATE_TR` (words per minute) override
+    it; `say -v '?'` lists the machine's voices.
 - **`--only=<substrings>`** builds just the matching keys — a three-file
   audition before committing to a full run. The manifest is still written from
   the full catalogue, so a partial run never drops keys other runs produced.

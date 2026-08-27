@@ -50,6 +50,24 @@ const VOICE_EN = "Leda";
 const VOICE_TR = "Sulafat";
 
 /*
+ * Google Cloud Text-to-Speech (Chirp 3 HD).
+ *
+ * Same voice family as the Gemini engine — Leda is one of the eight Chirp 3 HD
+ * voices — but billed per character rather than per request, which is the
+ * difference between a catalogue that builds in one run and one that takes
+ * twelve days. Sulafat is Gemini-only, so Turkish uses Aoede here.
+ *
+ * Pace is set through `speakingRate` rather than a style prompt: a number the
+ * API honours exactly, instead of an instruction the model interprets.
+ */
+const GCLOUD_ENDPOINT = "https://texttospeech.googleapis.com/v1/text:synthesize";
+const GCLOUD_VOICE_EN = process.env.GCLOUD_VOICE_EN || "en-US-Chirp3-HD-Leda";
+const GCLOUD_VOICE_TR = process.env.GCLOUD_VOICE_TR || "tr-TR-Chirp3-HD-Aoede";
+/** Slow enough for a beginner to catch each word; 1.0 is conversational. */
+const GCLOUD_RATE_EN = Number(process.env.GCLOUD_RATE_EN) || 0.8;
+const GCLOUD_RATE_TR = Number(process.env.GCLOUD_RATE_TR) || 1.0;
+
+/*
  * Delivery instructions.
  *
  * Voice choice alone does not fix pace, and pace is the thing that makes a
@@ -75,12 +93,20 @@ const STYLE_TR =
 const FORCE = process.argv.includes("--force");
 
 /**
- * `--engine=say` uses the local macOS synthesiser; `gemini` (the default) calls
- * Google. See the `say` engine notes below for why the local one exists.
+ * Which synthesiser to use.
+ *
+ * `gcloud` (the default) is Google Cloud Text-to-Speech: metered per character
+ * with a free monthly allowance that dwarfs this catalogue, and its Chirp 3 HD
+ * line includes the same Leda voice the Gemini engine uses.
+ *
+ * `gemini` is the same voice family through the Gemini API, whose free tier
+ * meters ten requests per day — unusable for a hundred-odd files, so it is no
+ * longer the default. `say` is the local macOS fallback.
  */
 const ENGINE =
   (process.argv.find((arg) => arg.startsWith("--engine=")) ?? "").replace("--engine=", "") ||
-  "gemini";
+  "gcloud";
+const ENGINES = new Set(["gcloud", "gemini", "say"]);
 
 /*
  * `--only=cat,line-ask` builds just the keys containing those substrings.
@@ -181,14 +207,14 @@ function hasFfmpeg() {
 
 const FFMPEG_AVAILABLE = hasFfmpeg();
 
-// Gemini TTS returns raw PCM; turning that into an mp3 needs ffmpeg. Without
-// it we still write a valid, playable file — just a .wav. The format is
-// recorded in the manifest and the player reads it from there, so neither
-// branch requires editing the app: ffmpeg is purely a size optimisation
-// (roughly a tenth of the bytes), never a prerequisite.
-const OUTPUT_EXT = FFMPEG_AVAILABLE ? "mp3" : "wav";
+// Cloud TTS returns encoded mp3 directly, so that engine never needs ffmpeg.
+// Gemini and `say` hand back raw PCM, which only becomes mp3 with ffmpeg;
+// without it they write a valid .wav instead. The format is recorded in the
+// manifest and the player reads it from there, so no branch requires editing
+// the app: ffmpeg is a size optimisation, never a prerequisite.
+const OUTPUT_EXT = ENGINE === "gcloud" || FFMPEG_AVAILABLE ? "mp3" : "wav";
 
-if (!FFMPEG_AVAILABLE) {
+if (!FFMPEG_AVAILABLE && ENGINE !== "gcloud") {
   console.warn(
     "[build-audio] ffmpeg not found on PATH: writing .wav instead of .mp3. " +
       "This works as-is — the manifest records the format and the app follows " +
@@ -246,7 +272,9 @@ function wavToMp3(wavBuffer) {
  * 429s, so requests are spaced out and a 429 is waited out rather than counted
  * as a failure. Set TTS_RPM higher on a paid key to go faster.
  */
-const RPM = Math.max(1, Number(process.env.TTS_RPM) || 3);
+// Cloud TTS quotas are per character and generous per minute; the Gemini free
+// tier is three requests a minute, so the default follows the engine.
+const RPM = Math.max(1, Number(process.env.TTS_RPM) || (ENGINE === "gcloud" ? 60 : 3));
 const MIN_INTERVAL_MS = Math.ceil(60000 / RPM);
 const MAX_RETRIES = 5;
 
@@ -351,8 +379,42 @@ function synthesizeWithSay(text, lang) {
   return FFMPEG_AVAILABLE ? wavToMp3(wav) : wav;
 }
 
+async function synthesizeWithGcloud(text, lang, apiKey) {
+  const response = await fetch(GCLOUD_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-Goog-Api-Key": apiKey },
+    body: JSON.stringify({
+      input: { text },
+      voice: {
+        languageCode: lang === "tr" ? "tr-TR" : "en-US",
+        name: lang === "tr" ? GCLOUD_VOICE_TR : GCLOUD_VOICE_EN,
+      },
+      audioConfig: {
+        // The API encodes mp3 for us, so this engine needs no ffmpeg.
+        audioEncoding: "MP3",
+        speakingRate: lang === "tr" ? GCLOUD_RATE_TR : GCLOUD_RATE_EN,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    const error = new Error(`Cloud TTS request failed (${response.status}): ${detail}`);
+    error.status = response.status;
+    error.retryAfterMs = retryDelayFromBody(detail);
+    error.dailyQuota = response.status === 429 && isDailyQuota(detail);
+    throw error;
+  }
+
+  const data = await response.json();
+  if (!data.audioContent) throw new Error("Cloud TTS response had no audioContent");
+
+  return Buffer.from(data.audioContent, "base64");
+}
+
 async function synthesize(text, lang, apiKey) {
   if (ENGINE === "say") return synthesizeWithSay(text, lang);
+  if (ENGINE === "gcloud") return synthesizeWithGcloud(text, lang, apiKey);
 
   const voiceName = lang === "tr" ? VOICE_TR : VOICE_EN;
   const style = lang === "tr" ? STYLE_TR : STYLE_EN;
@@ -398,15 +460,24 @@ async function synthesize(text, lang, apiKey) {
 }
 
 async function main() {
-  if (ENGINE !== "gemini" && ENGINE !== "say") {
-    console.error(`[build-audio] unknown --engine=${ENGINE}. Use "gemini" or "say".`);
+  if (!ENGINES.has(ENGINE)) {
+    console.error(
+      `[build-audio] unknown --engine=${ENGINE}. Use ${[...ENGINES].join(", ")}.`,
+    );
     process.exitCode = 1;
     return;
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (ENGINE === "gemini" && !apiKey) {
-    console.error("GEMINI_API_KEY is not set. Export it, or use --engine=say.");
+  // One Google Cloud API key with both APIs enabled serves either engine, so
+  // GEMINI_API_KEY is accepted as a fallback rather than demanding a second one.
+  const apiKey =
+    ENGINE === "gcloud"
+      ? process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY
+      : process.env.GEMINI_API_KEY;
+
+  if (ENGINE !== "say" && !apiKey) {
+    const expected = ENGINE === "gcloud" ? "GOOGLE_TTS_API_KEY (or GEMINI_API_KEY)" : "GEMINI_API_KEY";
+    console.error(`${expected} is not set. Export it, or use --engine=say.`);
     process.exitCode = 1;
     return;
   }
@@ -455,10 +526,14 @@ async function main() {
     );
   } else {
     const estimateMinutes = Math.ceil((pending * MIN_INTERVAL_MS) / 60000);
+    const label =
+      ENGINE === "gcloud"
+        ? `Cloud TTS (${GCLOUD_VOICE_EN} / ${GCLOUD_VOICE_TR})`
+        : `Gemini (${VOICE_EN} / ${VOICE_TR})`;
     console.log(
-      `[build-audio] engine: Gemini. ${jobs.length} keys selected, ${pending} to synthesize at ` +
-        `${RPM} requests/minute — roughly ${estimateMinutes} minute(s). ` +
-        "Set TTS_RPM higher on a paid key. Safe to interrupt: finished files are kept.",
+      `[build-audio] engine: ${label}. ${jobs.length} keys selected, ${pending} to ` +
+        `synthesize at ${RPM} requests/minute — roughly ${estimateMinutes} minute(s). ` +
+        "Raise TTS_RPM to go faster. Safe to interrupt: finished files are kept.",
     );
   }
 
