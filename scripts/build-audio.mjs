@@ -22,7 +22,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -73,6 +73,14 @@ const STYLE_TR =
   "normal konuşma hızında oku.";
 
 const FORCE = process.argv.includes("--force");
+
+/**
+ * `--engine=say` uses the local macOS synthesiser; `gemini` (the default) calls
+ * Google. See the `say` engine notes below for why the local one exists.
+ */
+const ENGINE =
+  (process.argv.find((arg) => arg.startsWith("--engine=")) ?? "").replace("--engine=", "") ||
+  "gemini";
 
 /*
  * `--only=cat,line-ask` builds just the keys containing those substrings.
@@ -257,7 +265,21 @@ function retryDelayFromBody(body) {
   return prose ? Math.ceil(Number(prose[1]) * 1000) : null;
 }
 
+/**
+ * A per-day quota is not something waiting fixes.
+ *
+ * The free tier allows ten TTS requests a day, so retrying a daily refusal
+ * burns five minutes per key and still fails — a full catalogue would sit there
+ * for hours pretending to make progress. Daily refusals abort the run instead.
+ */
+function isDailyQuota(body) {
+  return /PerDay/i.test(body);
+}
+
 async function throttle() {
+  // The local engine has no quota to pace against.
+  if (ENGINE === "say") return;
+
   const waitMs = lastRequestAt + MIN_INTERVAL_MS - Date.now();
   if (waitMs > 0) await sleep(waitMs);
   lastRequestAt = Date.now();
@@ -269,6 +291,8 @@ async function synthesizeWithRetry(text, lang, apiKey, onWait) {
     try {
       return await synthesize(text, lang, apiKey);
     } catch (error) {
+      if (error.dailyQuota) throw error;
+
       const rateLimited = error.status === 429;
       if (!rateLimited || attempt > MAX_RETRIES) throw error;
 
@@ -280,7 +304,56 @@ async function synthesizeWithRetry(text, lang, apiKey, onWait) {
   }
 }
 
+/*
+ * macOS `say` engine.
+ *
+ * Gemini's free tier allows ten TTS requests a day, which cannot build a
+ * hundred-odd file catalogue — twelve days of runs. macOS ships a perfectly
+ * good speech synthesiser with a Turkish voice, no key, no quota and no
+ * network, so `--engine=say` builds the whole catalogue in seconds.
+ *
+ * Pace is set in words per minute rather than by a style prompt: English slow
+ * enough for a beginner to catch each word, Turkish at a normal pace.
+ */
+const SAY_VOICE_EN = process.env.SAY_VOICE_EN || "Samantha";
+const SAY_VOICE_TR = process.env.SAY_VOICE_TR || "Yelda";
+const SAY_RATE_EN = Number(process.env.SAY_RATE_EN) || 130;
+const SAY_RATE_TR = Number(process.env.SAY_RATE_TR) || 165;
+
+function sayVoiceAvailable(voice) {
+  try {
+    const listed = execFileSync("say", ["-v", "?"], { encoding: "utf8" });
+    return listed.split("\n").some((line) => line.startsWith(`${voice} `));
+  } catch {
+    return false;
+  }
+}
+
+function synthesizeWithSay(text, lang) {
+  const voice = lang === "tr" ? SAY_VOICE_TR : SAY_VOICE_EN;
+  const rate = lang === "tr" ? SAY_RATE_TR : SAY_RATE_EN;
+  const tempPath = join(AUDIO_DIR, `.say-${process.pid}.wav`);
+
+  const result = spawnSync(
+    "say",
+    ["-v", voice, "-r", String(rate), "-o", tempPath, "--data-format=LEI16@24000", text],
+    { encoding: "utf8" },
+  );
+
+  if (result.status !== 0) {
+    const detail = (result.stderr || "").trim().slice(-300);
+    throw new Error(`say failed for voice "${voice}": ${detail || "unknown error"}`);
+  }
+
+  const wav = readFileSync(tempPath);
+  rmSync(tempPath, { force: true });
+
+  return FFMPEG_AVAILABLE ? wavToMp3(wav) : wav;
+}
+
 async function synthesize(text, lang, apiKey) {
+  if (ENGINE === "say") return synthesizeWithSay(text, lang);
+
   const voiceName = lang === "tr" ? VOICE_TR : VOICE_EN;
   const style = lang === "tr" ? STYLE_TR : STYLE_EN;
   const styledPrompt = `${style}\n\n${text}`;
@@ -306,6 +379,7 @@ async function synthesize(text, lang, apiKey) {
     const error = new Error(`Gemini TTS request failed (${response.status}): ${detail}`);
     error.status = response.status;
     error.retryAfterMs = retryDelayFromBody(detail);
+    error.dailyQuota = response.status === 429 && isDailyQuota(detail);
     throw error;
   }
 
@@ -324,11 +398,30 @@ async function synthesize(text, lang, apiKey) {
 }
 
 async function main() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    console.error("GEMINI_API_KEY is not set. Export it before running this script.");
+  if (ENGINE !== "gemini" && ENGINE !== "say") {
+    console.error(`[build-audio] unknown --engine=${ENGINE}. Use "gemini" or "say".`);
     process.exitCode = 1;
     return;
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (ENGINE === "gemini" && !apiKey) {
+    console.error("GEMINI_API_KEY is not set. Export it, or use --engine=say.");
+    process.exitCode = 1;
+    return;
+  }
+
+  if (ENGINE === "say") {
+    const missing = [SAY_VOICE_EN, SAY_VOICE_TR].filter((voice) => !sayVoiceAvailable(voice));
+    if (missing.length) {
+      console.error(
+        `[build-audio] macOS voice(s) not installed: ${missing.join(", ")}. ` +
+          "List what you have with `say -v '?'`, then set SAY_VOICE_EN / SAY_VOICE_TR. " +
+          "More voices install under System Settings → Accessibility → Spoken Content.",
+      );
+      process.exitCode = 1;
+      return;
+    }
   }
 
   mkdirSync(AUDIO_DIR, { recursive: true });
@@ -355,13 +448,19 @@ async function main() {
   const pending = FORCE
     ? jobs.length
     : jobs.filter((job) => !existsSync(join(AUDIO_DIR, `${job.key}.${OUTPUT_EXT}`))).length;
-  const estimateMinutes = Math.ceil((pending * MIN_INTERVAL_MS) / 60000);
-
-  console.log(
-    `[build-audio] ${jobs.length} keys selected, ${pending} to synthesize at ` +
-      `${RPM} requests/minute — roughly ${estimateMinutes} minute(s). ` +
-      "Set TTS_RPM higher on a paid key. Safe to interrupt: finished files are kept.",
-  );
+  if (ENGINE === "say") {
+    console.log(
+      `[build-audio] engine: macOS say (${SAY_VOICE_EN} / ${SAY_VOICE_TR}). ` +
+        `${jobs.length} keys selected, ${pending} to synthesize.`,
+    );
+  } else {
+    const estimateMinutes = Math.ceil((pending * MIN_INTERVAL_MS) / 60000);
+    console.log(
+      `[build-audio] engine: Gemini. ${jobs.length} keys selected, ${pending} to synthesize at ` +
+        `${RPM} requests/minute — roughly ${estimateMinutes} minute(s). ` +
+        "Set TTS_RPM higher on a paid key. Safe to interrupt: finished files are kept.",
+    );
+  }
 
   let index = 0;
   for (const job of jobs) {
@@ -389,6 +488,16 @@ async function main() {
       const message = error instanceof Error ? error.message : String(error);
       failed.push({ key: job.key, message });
       console.error(`[build-audio] skipped "${job.key}": ${message}`);
+
+      if (error.dailyQuota) {
+        console.error(
+          "[build-audio] Daily Gemini TTS quota is spent — the free tier allows ten " +
+            "requests a day, so the remaining keys cannot be built today. Re-run with " +
+            "--engine=say to build them all locally now, or come back tomorrow. " +
+            "Files already written are kept and will be skipped next time.",
+        );
+        break;
+      }
     }
   }
 
