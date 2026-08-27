@@ -74,6 +74,20 @@ const STYLE_TR =
 
 const FORCE = process.argv.includes("--force");
 
+/*
+ * `--only=cat,line-ask` builds just the keys containing those substrings.
+ *
+ * At three requests a minute the full catalogue takes well over half an hour,
+ * which is a long time to wait before finding out the voice is wrong. This
+ * makes a three-file audition cheap: pick the voice first, then commit to the
+ * full run.
+ */
+const ONLY = (process.argv.find((arg) => arg.startsWith("--only=")) ?? "")
+  .replace("--only=", "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
+
 function readJson(path) {
   return JSON.parse(readFileSync(path, "utf8"));
 }
@@ -216,6 +230,56 @@ function wavToMp3(wavBuffer) {
   return result.stdout;
 }
 
+/*
+ * Rate limiting.
+ *
+ * The free tier allows three TTS requests per minute per model. Firing the
+ * whole catalogue as fast as the loop can go earns four files and a hundred
+ * 429s, so requests are spaced out and a 429 is waited out rather than counted
+ * as a failure. Set TTS_RPM higher on a paid key to go faster.
+ */
+const RPM = Math.max(1, Number(process.env.TTS_RPM) || 3);
+const MIN_INTERVAL_MS = Math.ceil(60000 / RPM);
+const MAX_RETRIES = 5;
+
+let lastRequestAt = 0;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Google reports how long to wait; honouring it beats guessing. */
+function retryDelayFromBody(body) {
+  const structured = /"retryDelay"\s*:\s*"(\d+(?:\.\d+)?)s"/.exec(body);
+  if (structured) return Math.ceil(Number(structured[1]) * 1000);
+
+  const prose = /retry in (\d+(?:\.\d+)?)s/i.exec(body);
+  return prose ? Math.ceil(Number(prose[1]) * 1000) : null;
+}
+
+async function throttle() {
+  const waitMs = lastRequestAt + MIN_INTERVAL_MS - Date.now();
+  if (waitMs > 0) await sleep(waitMs);
+  lastRequestAt = Date.now();
+}
+
+async function synthesizeWithRetry(text, lang, apiKey, onWait) {
+  for (let attempt = 1; ; attempt += 1) {
+    await throttle();
+    try {
+      return await synthesize(text, lang, apiKey);
+    } catch (error) {
+      const rateLimited = error.status === 429;
+      if (!rateLimited || attempt > MAX_RETRIES) throw error;
+
+      // Fall back to a widening wait when Google does not say how long.
+      const waitMs = error.retryAfterMs ?? attempt * 20000;
+      onWait?.(waitMs, attempt);
+      await sleep(waitMs + 1000);
+    }
+  }
+}
+
 async function synthesize(text, lang, apiKey) {
   const voiceName = lang === "tr" ? VOICE_TR : VOICE_EN;
   const style = lang === "tr" ? STYLE_TR : STYLE_EN;
@@ -239,7 +303,10 @@ async function synthesize(text, lang, apiKey) {
     // Printed as-is, including a 404 from a renamed/retired model: no
     // silent retry against a different model name.
     const detail = await response.text();
-    throw new Error(`Gemini TTS request failed (${response.status}): ${detail}`);
+    const error = new Error(`Gemini TTS request failed (${response.status}): ${detail}`);
+    error.status = response.status;
+    error.retryAfterMs = retryDelayFromBody(detail);
+    throw error;
   }
 
   const data = await response.json();
@@ -266,16 +333,35 @@ async function main() {
 
   mkdirSync(AUDIO_DIR, { recursive: true });
 
-  const jobs = collectJobs();
+  const allJobs = collectJobs();
+  const jobs = ONLY.length
+    ? allJobs.filter((job) => ONLY.some((needle) => job.key.includes(needle)))
+    : allJobs;
+
+  if (!jobs.length) {
+    console.error(`[build-audio] --only=${ONLY.join(",")} matched no keys.`);
+    process.exitCode = 1;
+    return;
+  }
+
   let builtCount = 0;
   let skippedCount = 0;
   const failed = [];
 
-  // Progress is printed per key, not just on failure. A hundred-odd sequential
-  // TTS calls take several minutes, and a silent cursor for that long is
+  // Progress is printed per key, not just on failure. At three requests a
+  // minute this run takes a long time, and a silent cursor for that long is
   // indistinguishable from a hang — the run gets killed by someone reasonably
   // assuming it died.
-  console.log(`[build-audio] ${jobs.length} keys to process.`);
+  const pending = FORCE
+    ? jobs.length
+    : jobs.filter((job) => !existsSync(join(AUDIO_DIR, `${job.key}.${OUTPUT_EXT}`))).length;
+  const estimateMinutes = Math.ceil((pending * MIN_INTERVAL_MS) / 60000);
+
+  console.log(
+    `[build-audio] ${jobs.length} keys selected, ${pending} to synthesize at ` +
+      `${RPM} requests/minute — roughly ${estimateMinutes} minute(s). ` +
+      "Set TTS_RPM higher on a paid key. Safe to interrupt: finished files are kept.",
+  );
 
   let index = 0;
   for (const job of jobs) {
@@ -290,7 +376,12 @@ async function main() {
     }
 
     try {
-      const audio = await synthesize(job.text, job.lang, apiKey);
+      const audio = await synthesizeWithRetry(job.text, job.lang, apiKey, (waitMs, attempt) => {
+        console.log(
+          `[build-audio] ${position} ${job.key} — rate limited, waiting ` +
+            `${Math.ceil(waitMs / 1000)}s (attempt ${attempt}/${MAX_RETRIES})`,
+        );
+      });
       writeFileSync(outPath, audio);
       builtCount += 1;
       console.log(`[build-audio] ${position} ${job.key} — ${(audio.length / 1024).toFixed(0)} KB`);
@@ -304,7 +395,9 @@ async function main() {
   // The manifest lists every key that currently has a playable file on disk
   // — not just the ones this run touched — so a partial or repeated run
   // still leaves the app able to use whatever has succeeded so far.
-  const manifestKeys = jobs
+  // Built from the full catalogue, not this run's selection: a `--only` run
+  // must not drop keys that other runs already produced.
+  const manifestKeys = allJobs
     .map((job) => job.key)
     .filter((key) => existsSync(join(AUDIO_DIR, `${key}.${OUTPUT_EXT}`)));
 
