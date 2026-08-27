@@ -271,11 +271,21 @@ async function main() {
   let skippedCount = 0;
   const failed = [];
 
+  // Progress is printed per key, not just on failure. A hundred-odd sequential
+  // TTS calls take several minutes, and a silent cursor for that long is
+  // indistinguishable from a hang — the run gets killed by someone reasonably
+  // assuming it died.
+  console.log(`[build-audio] ${jobs.length} keys to process.`);
+
+  let index = 0;
   for (const job of jobs) {
     const outPath = join(AUDIO_DIR, `${job.key}.${OUTPUT_EXT}`);
+    index += 1;
+    const position = `${String(index).padStart(3)}/${jobs.length}`;
 
     if (!FORCE && existsSync(outPath)) {
       skippedCount += 1;
+      console.log(`[build-audio] ${position} ${job.key} — already on disk, skipped`);
       continue;
     }
 
@@ -283,6 +293,7 @@ async function main() {
       const audio = await synthesize(job.text, job.lang, apiKey);
       writeFileSync(outPath, audio);
       builtCount += 1;
+      console.log(`[build-audio] ${position} ${job.key} — ${(audio.length / 1024).toFixed(0)} KB`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failed.push({ key: job.key, message });
