@@ -426,8 +426,28 @@ h3 {
 }
 
 .game-visual {
-  font-size: clamp(5rem, 22vw, 8rem);
+  display: grid;
+  place-items: center;
+  width: clamp(9rem, 42vw, 13rem);
+  height: clamp(9rem, 42vw, 13rem);
+  border-radius: 50%;
+  background: var(--panel-soft);
+  box-shadow: inset 0 0 0 1px var(--line);
+  font-size: clamp(5rem, 24vw, 7.5rem);
   line-height: 1;
+}
+
+/* A colour is shown as the colour itself. The coloured-circle emoji read as a
+   ball — which is also a card in the deck — so "what colour is this?" looked
+   like a trick question. A plain swatch cannot be mistaken for an object. */
+.game-swatch {
+  display: block;
+  width: clamp(9rem, 46vw, 14rem);
+  height: clamp(6.5rem, 32vw, 9.5rem);
+  border-radius: 20px;
+  box-shadow:
+    inset 0 0 0 1px rgba(23, 32, 42, 0.18),
+    0 10px 26px rgba(23, 32, 42, 0.16);
 }
 
 .game-prompt {

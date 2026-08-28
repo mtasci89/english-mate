@@ -53,6 +53,8 @@ export type Turn = {
    * from conversation is presented as its Turkish word to translate.
    */
   visualText?: string;
+  /** Colour cards are drawn as a swatch of this value instead of an emoji. */
+  visualColor?: string;
   expects: Expectation;
   /** Speech turns only: the word we are listening for. */
   target?: string;

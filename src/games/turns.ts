@@ -80,7 +80,8 @@ export function nextNameTurn(previousKey: string | null): Turn {
   return {
     gameId: "nameit",
     itemKey: key,
-    visual: word.visual,
+    visual: word.color ? undefined : word.visual,
+    visualColor: word.color,
     expects: "speech",
     target: word.en,
     distractors: word.distractors,

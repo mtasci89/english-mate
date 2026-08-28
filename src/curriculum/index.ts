@@ -20,6 +20,12 @@ export type Word = {
   distractors: string[];
   /** Turkish takes no article here: "Bu su", not "Bu bir su". */
   mass?: boolean;
+  /**
+   * Colours are drawn as a swatch of this value rather than shown as an emoji.
+   * The coloured-circle emoji read as a ball, which collided with the actual
+   * ball card and made "what colour is this?" look like a trick question.
+   */
+  color?: string;
 };
 
 export type Line = { key: string; text: string };

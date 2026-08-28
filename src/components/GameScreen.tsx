@@ -130,7 +130,7 @@ export function GameScreen({ gameId, onExit }: Props) {
       if (!result.silent) recordResult(current.itemKey, result.accepted);
       // A captured gap is closed once the child produces it unaided; leaving it
       // in the deck would spend turns on a word they now have.
-      if (result.accepted && current.target && !current.visual) clearGap(current.target);
+      if (result.accepted && current.target && current.visualText) clearGap(current.target);
 
       logAttempt({
         ts: Date.now(),
@@ -261,7 +261,13 @@ export function GameScreen({ gameId, onExit }: Props) {
       ) : (
         <>
           <div className="game-stage">
-            {turn?.visual ? (
+            {turn?.visualColor ? (
+              <span
+                className="game-swatch"
+                style={{ background: turn.visualColor }}
+                aria-hidden="true"
+              />
+            ) : turn?.visual ? (
               <span className="game-visual" aria-hidden="true">
                 {turn.visual}
               </span>
