@@ -159,7 +159,7 @@ function turkishHelpFor(word) {
         : `Bu bir ${word.tr}`;
   // No English word here: this is read by the Turkish voice, which would
   // mispronounce it. The English follows in the English voice.
-  return `${lead}. İngilizcesi şöyle:`;
+  return `${lead}.`;
 }
 
 /** Every {key, text, lang} that needs a rendered file, deduplicated by key. */

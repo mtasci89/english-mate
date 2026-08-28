@@ -68,10 +68,10 @@ export const audioKeys = {
 /**
  * The Turkish half of the lifeline, and only the Turkish half.
  *
- * This used to end with "İngilizcesi: kite." — but the whole sentence is spoken
- * by the Turkish voice, which reads English spelling by Turkish rules and says
- * "kit". A voice speaks one language. The English word is left to the utterance
- * that follows, in the English voice, where it is pronounced correctly.
+ * It carries no English word. The whole sentence is spoken by the Turkish
+ * voice, which reads English spelling by Turkish rules — "kite" came out as
+ * "kit" — and a voice speaks one language. The English follows as its own
+ * utterance, in the English voice, where it is pronounced properly.
  *
  * "Bu bir kedi.", "Bu renk kırmızı.", "Bu su." — whichever the word takes.
  */
@@ -82,7 +82,7 @@ export function turkishHelpFor(word: Word) {
       : word.mass
         ? `Bu ${word.tr}`
         : `Bu bir ${word.tr}`;
-  return `${lead}. İngilizcesi şöyle:`;
+  return `${lead}.`;
 }
 
 export function englishRepeatFor(word: Word) {

@@ -57,7 +57,7 @@ function gapTurn(gap: Gap): Turn {
     prompt: line(pick(lines.askGap)),
     // Turkish only — the English word follows in the English voice, because a
     // Turkish voice reads English spelling by Turkish rules.
-    trHelp: `${gap.tr} demek. İngilizcesi şöyle:`,
+    trHelp: `Bu ${gap.tr} demek.`,
     englishRepeat: { text: `Say: ${gap.en}.`, lang: "en", preferRemote: true },
   };
 }
@@ -181,18 +181,11 @@ export function lifelineFor(turn: Turn): Speakable[] {
     ? { text: turn.trHelp, lang: "tr", audioKey: trKey }
     : { text: turn.trHelp, lang: "tr", preferRemote: true };
 
-  // A "Move With Me" command is a whole sentence, not a word to name, so it
-  // goes straight to the English repeat.
-  if (turn.gameId === "move") return [turkish, turn.englishRepeat];
-
-  // The bare word first, in the English voice and slowly: the Turkish sentence
-  // has just promised "the English is like this", and this is it. Then the
-  // invitation to say it.
-  const bareWord: Speakable = word
-    ? { text: word.en, lang: "en", audioKey: audioKeys.wordEn(word.key), rate: 0.6 }
-    : { text: turn.target ?? "", lang: "en", rate: 0.6, preferRemote: true };
-
-  return [turkish, bareWord, turn.englishRepeat];
+  // Two utterances, never three. Saying the bare word and then "Say: bus."
+  // made the toy repeat itself — "bus, say bus" — and the invitation already
+  // contains the word, spoken by the English voice, which was the only reason
+  // the bare one was added.
+  return [turkish, turn.englishRepeat];
 }
 
 export function introFor(gameId: "move" | "nameit"): Speakable {
