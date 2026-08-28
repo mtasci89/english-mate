@@ -55,7 +55,9 @@ function gapTurn(gap: Gap): Turn {
     target: gap.en,
     distractors: [],
     prompt: line(pick(lines.askGap)),
-    trHelp: `${gap.tr} demek. İngilizcesi: ${gap.en}.`,
+    // Turkish only — the English word follows in the English voice, because a
+    // Turkish voice reads English spelling by Turkish rules.
+    trHelp: `${gap.tr} demek. İngilizcesi şöyle:`,
     englishRepeat: { text: `Say: ${gap.en}.`, lang: "en", preferRemote: true },
   };
 }
@@ -169,16 +171,27 @@ export function feedbackForAction(): Feedback {
 export function lifelineFor(turn: Turn): Speakable[] {
   // A captured-gap card has no rendered Turkish either, so it goes to the
   // server rather than dropping to the browser voice mid-game.
-  const cached = turn.gameId === "move" || wordByKey.has(turn.itemKey);
+  const word = wordByKey.get(turn.itemKey);
+  const cached = turn.gameId === "move" || Boolean(word);
   const trKey =
     turn.gameId === "move" ? audioKeys.commandTr(turn.itemKey) : audioKeys.wordTr(turn.itemKey);
 
-  return [
-    cached
-      ? { text: turn.trHelp, lang: "tr", audioKey: trKey }
-      : { text: turn.trHelp, lang: "tr", preferRemote: true },
-    turn.englishRepeat,
-  ];
+  const turkish: Speakable = cached
+    ? { text: turn.trHelp, lang: "tr", audioKey: trKey }
+    : { text: turn.trHelp, lang: "tr", preferRemote: true };
+
+  // A "Move With Me" command is a whole sentence, not a word to name, so it
+  // goes straight to the English repeat.
+  if (turn.gameId === "move") return [turkish, turn.englishRepeat];
+
+  // The bare word first, in the English voice and slowly: the Turkish sentence
+  // has just promised "the English is like this", and this is it. Then the
+  // invitation to say it.
+  const bareWord: Speakable = word
+    ? { text: word.en, lang: "en", audioKey: audioKeys.wordEn(word.key), rate: 0.6 }
+    : { text: turn.target ?? "", lang: "en", rate: 0.6, preferRemote: true };
+
+  return [turkish, bareWord, turn.englishRepeat];
 }
 
 export function introFor(gameId: "move" | "nameit"): Speakable {
