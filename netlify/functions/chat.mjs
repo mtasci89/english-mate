@@ -1,6 +1,18 @@
 const GEMINI_ENDPOINT =
   "https://generativelanguage.googleapis.com/v1beta/models";
 
+/*
+ * A ceiling, not a length control.
+ *
+ * Gemini 2.5 and 3 models spend thinking tokens out of this same budget, so a
+ * tight cap left nothing for the visible reply and answers arrived cut off
+ * mid-word ("Hello! How are"). Reply length is governed by the prompt — twenty
+ * words — and this only has to be roomy enough that thinking cannot crowd the
+ * answer out. Gemini 3 Flash does not support turning thinking off, so headroom
+ * is the reliable fix rather than thinkingConfig.
+ */
+const MAX_OUTPUT_TOKENS = 800;
+
 const headers = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type",
@@ -88,8 +100,10 @@ function extractText(data) {
 function trimToCompleteSentence(text, finishReason) {
   if (finishReason !== "MAX_TOKENS") return text;
 
+  // Any complete sentence beats a fragment: "Hello!" is a usable reply, "Hello!
+  // How are" is not. Only text with no sentence end at all is passed through.
   const lastBreak = Math.max(text.lastIndexOf("."), text.lastIndexOf("!"), text.lastIndexOf("?"));
-  return lastBreak > 20 ? text.slice(0, lastBreak + 1) : text;
+  return lastBreak >= 0 ? text.slice(0, lastBreak + 1) : text;
 }
 
 const TURKISH_HINTS =
@@ -173,7 +187,7 @@ export async function handler(event) {
           ],
         },
         contents: [{ role: "user", parts: [{ text: latestText }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 120 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: MAX_OUTPUT_TOKENS },
       }
     : {
         systemInstruction: {
@@ -185,7 +199,7 @@ export async function handler(event) {
           // the conventional answer instead of an inventive one.
           temperature: 0.75,
           topP: 0.9,
-          maxOutputTokens: 120,
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
         },
       };
 
