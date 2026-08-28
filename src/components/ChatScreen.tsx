@@ -92,16 +92,22 @@ export function ChatScreen({ settings, onExit }: Props) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: input, settings, messages: history }),
       });
-      if (!response.ok) throw new Error(String(response.status));
+      if (!response.ok) {
+        // The server says exactly what went wrong — a missing key, a retired
+        // model, a spent quota. Guessing from a bare status code cost a round
+        // of debugging, so the reason is carried through to the screen.
+        const problem = (await response.json().catch(() => null)) as
+          | { error?: string; detail?: string }
+          | null;
+        throw new Error(problem?.error ?? `HTTP ${response.status}`);
+      }
       const data = (await response.json()) as { text: string; lang?: "en" | "tr" };
       reply = { text: data.text, lang: data.lang ?? "en" };
       setDegraded(null);
-    } catch {
+    } catch (error) {
       reply = fallbackReply();
-      setDegraded(
-        "The conversation service is not answering, so these replies are canned. " +
-          "Check that GEMINI_API_KEY is set in the deployment's environment variables.",
-      );
+      const reason = error instanceof Error ? error.message : "unreachable";
+      setDegraded(`Replies are canned — the conversation service failed: ${reason}`);
     }
 
     if (!activeRef.current) return;

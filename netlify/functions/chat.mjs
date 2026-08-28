@@ -148,7 +148,11 @@ export async function handler(event) {
    */
   const translating = request.mode === "translate";
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  // gemini-2.0-flash was shut down on 1 June 2026, so every call 404'd and the
+  // client fell back to canned replies. Model IDs retire on a schedule; when
+  // this one goes, the error below names it, and GEMINI_MODEL overrides it
+  // without a code change.
+  const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
   const payload = translating
     ? {
         systemInstruction: {
@@ -188,7 +192,9 @@ export async function handler(event) {
   if (!response.ok) {
     const detail = await response.text();
     return json(response.status, {
-      error: "Gemini request failed",
+      // The model ID is in the message because a retired one is the likeliest
+      // cause, and it is invisible from the browser otherwise.
+      error: `Gemini request failed (${response.status}) for model "${model}"`,
       detail: detail.slice(0, 500),
     });
   }
