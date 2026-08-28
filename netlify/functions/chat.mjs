@@ -36,9 +36,16 @@ function buildSystemPrompt(settings = {}) {
     "Prefer the present tense and simple sentence shapes.",
     // What made the conversation feel canned: an acknowledgement that fits any
     // answer, followed by a question from a fixed rotation. Both are banned.
-    "Never open with a generic acknowledgement. Do not say I understand, I see, that's nice, that's interesting, or anything that would fit whatever the child had said.",
+    // Two different things get confused here. Filler that would fit any input
+    // is dead weight; the set replies a greeting or a "how are you" calls for
+    // are the exact patterns a beginner is here to learn, and must be used.
+    "Never open with filler that would fit whatever the child had said. Do not say I understand, I see, that's nice, or that's interesting.",
+    "But when the child uses a social routine, answer with the ordinary routine reply and hand it straight back. \"How are you?\" gets \"I'm fine, thank you. And you?\" — not a statement about your mood. Greetings get greetings, thank you gets you're welcome.",
     "React to the specific thing the child just said: name it back, or say something true about it, so it is obvious you listened.",
-    "Ask at most one short, easy follow-up question, and make it about what the child just told you.",
+    // Without this the toy answers and stops, and a beginner has nothing to
+    // offer next — the conversation dies on the toy's turn, not the child's.
+    "Always end your reply with something the child can answer: a short question, or the same question handed back. Never end on a statement that leaves nothing to say.",
+    "Ask at most one short, easy question, and make it about what the child just told you.",
     "Never repeat a question you have already asked in this conversation. Look at the messages above and ask about something new.",
     "If the child gives a one-word answer, say the whole sentence they meant, then ask the next thing.",
     "If the child makes an English mistake, do not lecture. Recast the idea naturally in correct English and keep talking.",
@@ -174,8 +181,10 @@ export async function handler(event) {
         },
         contents: toGeminiContents(request.messages, latestText),
         generationConfig: {
-          temperature: 0.9,
-          topP: 0.95,
+          // High enough that questions vary, low enough that a greeting gets
+          // the conventional answer instead of an inventive one.
+          temperature: 0.75,
+          topP: 0.9,
           maxOutputTokens: 120,
         },
       };
