@@ -246,6 +246,16 @@ export function speak(speakable: Speakable): Promise<void> {
     };
 
     if (!hasAudio(speakable.audioKey)) {
+      // Nothing pre-rendered. A line that asked for it goes to the server so
+      // the voice stays consistent; everything else takes the browser voice
+      // rather than paying a round trip inside a game turn.
+      if (speakable.preferRemote) {
+        void speakRemote(speakable).then((played) => {
+          if (played) finish();
+          else speakWithBrowserVoice(speakable, finish);
+        });
+        return;
+      }
       speakWithBrowserVoice(speakable, finish);
       return;
     }

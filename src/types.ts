@@ -31,6 +31,13 @@ export type Speakable = {
   audioKey?: string;
   /** Overrides the default browser-voice pace, e.g. a word being modelled. */
   rate?: number;
+  /**
+   * Synthesize through the server rather than falling back to the browser
+   * voice. Set for lines that cannot be pre-rendered — a word captured from
+   * conversation has no cached file, and the browser voice would be a jarring
+   * change of character mid-game.
+   */
+  preferRemote?: boolean;
 };
 
 /** What the child is expected to do in response to a prompt. */
@@ -41,6 +48,11 @@ export type Turn = {
   prompt: Speakable;
   /** Large glyph shown with the prompt. Emoji keeps the prototype asset-free. */
   visual?: string;
+  /**
+   * Shown instead of a glyph when the card has no picture — a word captured
+   * from conversation is presented as its Turkish word to translate.
+   */
+  visualText?: string;
   expects: Expectation;
   /** Speech turns only: the word we are listening for. */
   target?: string;

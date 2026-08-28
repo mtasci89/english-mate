@@ -8,8 +8,9 @@ import {
   wordByKey,
   wordKeys,
   type Line,
-  type Word,
+
 } from "../curriculum";
+import { gapKey, listGaps, type Gap } from "../curriculum/gaps";
 import { pickNext } from "../curriculum/srs";
 import type { MatchResult } from "../speech/match";
 import type { Speakable, Turn } from "../types";
@@ -37,7 +38,40 @@ export function nextMoveTurn(previousKey: string | null): Turn {
   };
 }
 
+/**
+ * A card for a word the child reached for in Turkish during a conversation.
+ *
+ * There is no picture for these — they arrive as words, not as curriculum — so
+ * the Turkish word itself is the card, and the child supplies the English. No
+ * cached audio exists either, so the lines are spoken through the server to
+ * keep the same voice as the rest of the game.
+ */
+function gapTurn(gap: Gap): Turn {
+  return {
+    gameId: "nameit",
+    itemKey: gapKey(gap.en),
+    visualText: gap.tr,
+    expects: "speech",
+    target: gap.en,
+    distractors: [],
+    prompt: line(pick(lines.askGap)),
+    trHelp: `${gap.tr} demek. İngilizcesi: ${gap.en}.`,
+    englishRepeat: { text: `Say: ${gap.en}.`, lang: "en", preferRemote: true },
+  };
+}
+
 export function nextNameTurn(previousKey: string | null): Turn {
+  /*
+   * Captured gaps come first, and often: the child has already demonstrated
+   * they need these, which no curriculum ordering can tell us. They are still
+   * mixed rather than exclusive, so a session does not become a list of
+   * everything the child got wrong.
+   */
+  const gaps = listGaps().filter((gap) => gapKey(gap.en) !== previousKey);
+  if (gaps.length && Math.random() < 0.4) {
+    return gapTurn(pick(gaps));
+  }
+
   const key = pickNext(wordKeys, previousKey);
   const word = wordByKey.get(key)!;
 
@@ -78,8 +112,16 @@ export type Feedback = {
 export function feedbackForSpeech(
   result: MatchResult,
   hintLevel: number,
-  word: Word,
+  turn: Turn,
 ): Feedback {
+  // Curriculum words have a pre-rendered pronunciation; a word captured from
+  // conversation does not, and is spoken through the server instead.
+  const target = turn.target ?? "";
+  const cached = wordByKey.get(turn.itemKey);
+  const modelWord: Speakable = cached
+    ? { text: cached.en, lang: "en", audioKey: audioKeys.wordEn(cached.key), rate: 0.6 }
+    : { text: target, lang: "en", rate: 0.6, preferRemote: true };
+
   if (result.accepted) {
     return { speakables: [line(pick(lines.praise))], advance: true, nextHintLevel: 0 };
   }
@@ -109,11 +151,7 @@ export function feedbackForSpeech(
   // said slower still — this is the one moment the child is being asked to
   // copy a sound exactly, so clarity beats naturalness.
   return {
-    speakables: [
-      line(lines.modelListen),
-      { text: word.en, lang: "en", audioKey: audioKeys.wordEn(word.key), rate: 0.6 },
-      line(lines.modelNowYou),
-    ],
+    speakables: [line(lines.modelListen), modelWord, line(lines.modelNowYou)],
     advance: false,
     nextHintLevel: 2,
   };
@@ -129,11 +167,16 @@ export function feedbackForAction(): Feedback {
  * the turn an English answer.
  */
 export function lifelineFor(turn: Turn): Speakable[] {
+  // A captured-gap card has no rendered Turkish either, so it goes to the
+  // server rather than dropping to the browser voice mid-game.
+  const cached = turn.gameId === "move" || wordByKey.has(turn.itemKey);
   const trKey =
     turn.gameId === "move" ? audioKeys.commandTr(turn.itemKey) : audioKeys.wordTr(turn.itemKey);
 
   return [
-    { text: turn.trHelp, lang: "tr", audioKey: trKey },
+    cached
+      ? { text: turn.trHelp, lang: "tr", audioKey: trKey }
+      : { text: turn.trHelp, lang: "tr", preferRemote: true },
     turn.englishRepeat,
   ];
 }

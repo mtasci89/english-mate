@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cancelSpeech, loadManifest, preload, speak } from "../audio/player";
-import { wordByKey } from "../curriculum";
+import { clearGap } from "../curriculum/gaps";
 import { recordResult } from "../curriculum/srs";
 import {
   feedbackForAction,
@@ -125,10 +125,12 @@ export function GameScreen({ gameId, onExit }: Props) {
       setTranscript(heard);
 
       const result = matchAnswer(heard, current.target, current.distractors);
-      const word = wordByKey.get(current.itemKey)!;
-      const feedback = feedbackForSpeech(result, hintLevelRef.current, word);
+      const feedback = feedbackForSpeech(result, hintLevelRef.current, current);
 
       if (!result.silent) recordResult(current.itemKey, result.accepted);
+      // A captured gap is closed once the child produces it unaided; leaving it
+      // in the deck would spend turns on a word they now have.
+      if (result.accepted && current.target && !current.visual) clearGap(current.target);
 
       logAttempt({
         ts: Date.now(),
@@ -241,9 +243,15 @@ export function GameScreen({ gameId, onExit }: Props) {
       ) : (
         <>
           <div className="game-stage">
-            <span className="game-visual" aria-hidden="true">
-              {turn?.visual}
-            </span>
+            {turn?.visual ? (
+              <span className="game-visual" aria-hidden="true">
+                {turn.visual}
+              </span>
+            ) : (
+              <span className="game-word" lang="tr">
+                {turn?.visualText}
+              </span>
+            )}
             <p className="game-prompt">{turn?.prompt.text}</p>
           </div>
 

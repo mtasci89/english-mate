@@ -31,6 +31,7 @@ export const lines = linesData as {
   nameIntro: Line;
   askWhat: Line[];
   askColour: Line[];
+  askGap: Line[];
   praise: Line[];
   close: Line[];
   listening: Line[];

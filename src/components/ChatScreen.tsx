@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { cancelSpeech, speak, speakRemote } from "../audio/player";
 import { createRecognizer, type Recognizer } from "../speech/recognition";
+import { recordGaps } from "../curriculum/gaps";
 import { logAttempt, sessionId } from "../telemetry";
 import type { EngineState, Message, Settings, Speakable } from "../types";
 
@@ -127,7 +128,26 @@ export function ChatScreen({ settings, onExit }: Props) {
     });
 
     setMessages((current) => [...current, { role: "assistant", ...reply }]);
+    // Fire and forget, after the reply is on its way: the words the child
+    // reached for in Turkish are the best evidence of what Name It should
+    // drill next, and collecting them must not delay the conversation.
+    void captureGaps(input);
     await say(reply);
+  }
+
+  async function captureGaps(input: string) {
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "gaps", text: input }),
+      });
+      if (!response.ok) return;
+      const data = (await response.json()) as { gaps?: { tr: string; en: string }[] };
+      if (data.gaps?.length) recordGaps(data.gaps);
+    } catch {
+      // Losing a gap costs nothing a later conversation will not offer again.
+    }
   }
 
   function handleFinal(text: string) {

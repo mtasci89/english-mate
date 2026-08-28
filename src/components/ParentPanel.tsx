@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { loadVoices, turkishVoiceAvailable } from "../audio/player";
 import { wordKeys } from "../curriculum";
+import { listGaps } from "../curriculum/gaps";
 import { progressSummary } from "../curriculum/srs";
 import { correctionLabels, levelLabels, topicLabels } from "../settings";
 import { fetchSummary, type Summary } from "../telemetry";
@@ -21,6 +22,7 @@ export function ParentPanel({ settings, onChange, onExit }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [turkishVoice, setTurkishVoice] = useState(true);
   const vocabulary = progressSummary(wordKeys);
+  const gaps = listGaps();
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +97,31 @@ export function ParentPanel({ settings, onChange, onExit }: Props) {
           Showing this device only — the attempts function is not reachable, so
           server history is unavailable.
         </p>
+      )}
+
+      {/*
+        Words the child reached for in Turkish during a conversation. This is
+        the most direct evidence of what they want to say and cannot yet, and
+        Name It deals these back in until they are produced unaided.
+      */}
+      {gaps.length > 0 && (
+        <div className="engine-plan">
+          <h3>Words he reached for</h3>
+          <p>
+            Picked up mid-conversation and now mixed into Name It. Each one drops
+            off the list once he says it in English on his own.
+          </p>
+          <ul className="gap-list">
+            {gaps
+              .slice()
+              .reverse()
+              .map((gap) => (
+                <li key={gap.en}>
+                  <strong>{gap.en}</strong> <span>{gap.tr}</span>
+                </li>
+              ))}
+          </ul>
+        </div>
       )}
 
       <label className="field">

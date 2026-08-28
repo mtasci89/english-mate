@@ -174,13 +174,72 @@ export async function handler(event) {
    * first time does not understand it the second. Now the sentence is actually
    * rendered into Turkish before the English is repeated.
    */
-  const translating = request.mode === "translate";
-
   // gemini-2.0-flash was shut down on 1 June 2026, so every call 404'd and the
   // client fell back to canned replies. Model IDs retire on a schedule; when
   // this one goes, the error below names it, and GEMINI_MODEL overrides it
   // without a code change.
   const model = process.env.GEMINI_MODEL || "gemini-3.5-flash";
+
+  const translating = request.mode === "translate";
+
+  /*
+   * Gap mode: which words did the child reach for in Turkish?
+   *
+   * A Turkish word inside an English sentence is proof of a specific missing
+   * word — better evidence of what to teach next than any curriculum ordering.
+   * This runs after the reply has already been spoken, so it costs the child
+   * nothing, and its output seeds the Name It deck.
+   */
+  const findingGaps = request.mode === "gaps";
+  if (findingGaps) {
+    const gapPayload = {
+      systemInstruction: {
+        parts: [
+          {
+            text: [
+              "The sentence comes from a Turkish child speaking English. Some words may be Turkish, possibly misspelled because the microphone was listening for English.",
+              "List only the words the child said in Turkish instead of English.",
+              'Reply with a JSON array like [{"tr":"mısır","en":"corn"}] and nothing else.',
+              "Use the correct Turkish spelling in tr, and the single most ordinary English word in en.",
+              "If every word was already English, reply with [].",
+            ].join("\n"),
+          },
+        ],
+      },
+      contents: [{ role: "user", parts: [{ text: latestText }] }],
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+        responseMimeType: "application/json",
+      },
+    };
+
+    const gapResponse = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify(gapPayload),
+    });
+
+    if (!gapResponse.ok) return json(200, { gaps: [] });
+
+    const gapData = await gapResponse.json();
+    let gaps = [];
+    try {
+      const parsed = JSON.parse(extractText(gapData));
+      if (Array.isArray(parsed)) {
+        gaps = parsed
+          .filter((gap) => gap && typeof gap.tr === "string" && typeof gap.en === "string")
+          .map((gap) => ({ tr: gap.tr.trim().slice(0, 40), en: gap.en.trim().toLowerCase().slice(0, 40) }))
+          .filter((gap) => gap.tr && gap.en)
+          .slice(0, 5);
+      }
+    } catch {
+      // A malformed list is not worth failing the turn over.
+    }
+
+    return json(200, { gaps });
+  }
+
   const payload = translating
     ? {
         systemInstruction: {

@@ -6,6 +6,10 @@
     { "key": "line-ask-2", "text": "And this one?" },
     { "key": "line-ask-3", "text": "Tell me this one." }
   ],
+  "askGap": [
+    { "key": "line-askgap-1", "text": "How do you say this in English?" },
+    { "key": "line-askgap-2", "text": "Do you remember this one in English?" }
+  ],
   "askColour": [
     { "key": "line-askcolour-1", "text": "What colour is this?" },
     { "key": "line-askcolour-2", "text": "And this colour?" }

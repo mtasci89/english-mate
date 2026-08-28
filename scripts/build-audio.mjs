@@ -175,6 +175,7 @@ function collectJobs() {
     lines.nameIntro,
     ...lines.askWhat,
     ...lines.askColour,
+    ...lines.askGap,
     ...lines.praise,
     ...lines.close,
     ...lines.listening,

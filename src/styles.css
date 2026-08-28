@@ -545,3 +545,32 @@ h3 {
   font-weight: 700;
   line-height: 1.45;
 }
+
+/* A captured gap has no picture: the Turkish word itself is the card. */
+.game-word {
+  font-size: clamp(2.2rem, 9vw, 3.4rem);
+  font-weight: 850;
+  line-height: 1.15;
+  color: var(--amber);
+}
+
+.gap-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gap-list li {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+  background: #ffffff;
+  font-size: 0.9rem;
+}
+
+.gap-list span {
+  color: var(--muted);
+}
