@@ -40,7 +40,13 @@ export async function handler(event) {
   if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers, body: "" };
   if (event.httpMethod !== "POST") return json(405, { error: "Method not allowed" });
 
-  const apiKey = process.env.GOOGLE_TTS_API_KEY || process.env.GEMINI_API_KEY;
+  // Needs a Google Cloud key with Cloud Text-to-Speech enabled. An AI Studio
+  // Gemini key is accepted as a last resort but will usually be rejected by
+  // this API, which is why the client keeps its browser-voice fallback.
+  const apiKey =
+    process.env.GOOGLE_TTS_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GoogleGeminiKey;
   if (!apiKey) {
     // The client falls back to the browser voice, so this is a degraded
     // experience rather than a broken one — but it is reported, not hidden.

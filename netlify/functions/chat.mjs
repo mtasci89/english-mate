@@ -115,10 +115,14 @@ export async function handler(event) {
     return json(405, { error: "Method not allowed" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  // GoogleGeminiKey is accepted because that is what the deployment already
+  // called it. A name mismatch here fails the request, the client falls back to
+  // canned replies, and the whole conversation quietly stops using the model —
+  // a failure worth being generous about rather than strict.
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GoogleGeminiKey;
   if (!apiKey) {
     return json(500, {
-      error: "GEMINI_API_KEY is not configured in Netlify environment variables.",
+      error: "No Gemini key configured. Set GEMINI_API_KEY (or GoogleGeminiKey).",
     });
   }
 
