@@ -202,18 +202,17 @@ export function ChatScreen({ settings, onExit }: Props) {
     await say({ text: english, lang: "en" });
   }
 
-  function startListening() {
-    if (engineState === "listening") return;
+  // Built once and armed while the toy waits, so pressing and speaking straight
+  // away does not lose the first word to engine start-up.
+  const handleFinalRef = useRef(handleFinal);
+  handleFinalRef.current = handleFinal;
 
-    cancelSpeech();
-    setTranscript("");
-    setEngineState("listening");
-
+  useEffect(() => {
     const recognizer = createRecognizer({
       lang: "en-US",
       onPartial: setTranscript,
       onFinal: (text) => {
-        if (activeRef.current) handleFinal(text);
+        if (activeRef.current) handleFinalRef.current(text);
       },
       onDenied: () => {
         setMicDenied(true);
@@ -222,7 +221,20 @@ export function ChatScreen({ settings, onExit }: Props) {
     });
 
     recognizerRef.current = recognizer;
-    recognizer.start();
+    return () => recognizer.cancel();
+  }, []);
+
+  useEffect(() => {
+    if (engineState === "ready" && !micDenied) recognizerRef.current?.arm();
+  }, [engineState, micDenied]);
+
+  function startListening() {
+    if (engineState === "listening") return;
+
+    cancelSpeech();
+    setTranscript("");
+    setEngineState("listening");
+    recognizerRef.current?.start();
   }
 
   const busy = engineState === "speaking" || engineState === "thinking";

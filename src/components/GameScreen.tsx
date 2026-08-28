@@ -151,18 +151,21 @@ export function GameScreen({ gameId, onExit }: Props) {
     [finishItem],
   );
 
-  function startListening() {
-    if (engineState === "listening" || finished) return;
+  /*
+   * The recogniser is built once and armed as soon as the turn is the child's,
+   * not on the press. Spinning it up takes the browser a few hundred
+   * milliseconds, and a child who pressed and spoke at once lost the first word
+   * and had to say it again.
+   */
+  const handleAnswerRef = useRef(handleAnswer);
+  handleAnswerRef.current = handleAnswer;
 
-    cancelSpeech();
-    setTranscript("");
-    setEngineState("listening");
-
+  useEffect(() => {
     const recognizer = createRecognizer({
       lang: "en-US",
       onPartial: setTranscript,
       onFinal: (text) => {
-        if (activeRef.current) void handleAnswer(text);
+        if (activeRef.current) void handleAnswerRef.current(text);
       },
       onDenied: () => {
         setMicDenied(true);
@@ -171,7 +174,22 @@ export function GameScreen({ gameId, onExit }: Props) {
     });
 
     recognizerRef.current = recognizer;
-    recognizer.start();
+    return () => recognizer.cancel();
+  }, []);
+
+  useEffect(() => {
+    if (engineState === "ready" && !finished && !micDenied && turn?.expects === "speech") {
+      recognizerRef.current?.arm();
+    }
+  }, [engineState, finished, micDenied, turn]);
+
+  function startListening() {
+    if (engineState === "listening" || finished) return;
+
+    cancelSpeech();
+    setTranscript("");
+    setEngineState("listening");
+    recognizerRef.current?.start();
   }
 
   function stopListening() {

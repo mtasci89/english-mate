@@ -50,6 +50,19 @@ export type RecognizerOptions = {
 };
 
 export type Recognizer = {
+  /**
+   * Spin the engine up before the child presses.
+   *
+   * Constructing a recogniser and starting capture takes the browser a few
+   * hundred milliseconds, and a child who presses and talks immediately loses
+   * the first word to that gap — then has to repeat themselves, which is the
+   * one thing this toy must not make them do.
+   */
+  arm: () => void;
+  /**
+   * The press. Everything captured while merely armed is discarded here, so
+   * arming early can never put stray room noise into the answer.
+   */
   start: () => void;
   stop: () => void;
   cancel: () => void;
@@ -66,7 +79,7 @@ export type Recognizer = {
 export function createRecognizer(options: RecognizerOptions): Recognizer {
   const availableConstructor = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!availableConstructor) {
-    return { start: () => options.onFinal(""), stop: () => {}, cancel: () => {} };
+    return { arm: () => {}, start: () => options.onFinal(""), stop: () => {}, cancel: () => {} };
   }
   // Bind to a non-optional local so the nested `start()` closure below does
   // not re-widen this back to `SpeechRecognitionConstructor | undefined`.
@@ -77,6 +90,10 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
   let interimText = "";
   let delivered = false;
   let cancelled = false;
+  /** Engine is up and should stay up, restarting itself if the browser stops it. */
+  let armed = false;
+  /** The child is pressing: what is captured from here on is the answer. */
+  let holding = false;
 
   function deliver() {
     if (delivered) return;
@@ -84,15 +101,29 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
     options.onFinal([finalText, interimText].join(" ").replace(/\s+/g, " ").trim());
   }
 
-  function start() {
-    stopInstance();
+  function arm() {
+    if (armed) return;
+    armed = true;
+    cancelled = false;
+    launch();
+  }
 
-    const recognition = new SpeechRecognition();
-    instance = recognition;
+  function start() {
+    // Drop anything heard before the press, so an early-armed microphone can
+    // never feed room noise into the answer.
     finalText = "";
     interimText = "";
     delivered = false;
-    cancelled = false;
+    holding = true;
+
+    // Normally the engine is already running from arm(); this covers a press
+    // that beat it, or a browser that stopped it.
+    if (!instance) launch();
+  }
+
+  function launch() {
+    const recognition = new SpeechRecognition();
+    instance = recognition;
 
     recognition.continuous = true;
     recognition.interimResults = true;
@@ -125,6 +156,16 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
 
     recognition.onend = () => {
       if (cancelled) return;
+      instance = null;
+
+      // Browsers stop a "continuous" session on their own after a stretch of
+      // silence. While armed and not yet holding, that would quietly disarm the
+      // microphone before the child ever pressed, so it is restarted.
+      if (armed && !holding) {
+        launch();
+        return;
+      }
+
       deliver();
     };
 
@@ -146,6 +187,9 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
   }
 
   function stop() {
+    if (!holding) return;
+    holding = false;
+    armed = false;
     stopInstance();
     // Some engines never fire `onend` after a very short hold.
     window.setTimeout(deliver, 400);
@@ -154,6 +198,8 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
   function cancel() {
     cancelled = true;
     delivered = true;
+    armed = false;
+    holding = false;
     if (!instance) return;
     try {
       instance.abort();
@@ -163,5 +209,5 @@ export function createRecognizer(options: RecognizerOptions): Recognizer {
     instance = null;
   }
 
-  return { start, stop, cancel };
+  return { arm, start, stop, cancel };
 }
