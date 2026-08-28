@@ -186,6 +186,52 @@ function speakWithBrowserVoice(speakable: Speakable, onEnd: () => void) {
   window.speechSynthesis.speak(utterance);
 }
 
+/**
+ * Speaks a line that could not be pre-rendered, through the server's Cloud TTS
+ * proxy, so free chat keeps the same voice as the cached prompts instead of
+ * dropping to the browser synthesiser.
+ *
+ * Resolves false when the proxy is unavailable, leaving the caller to fall back
+ * rather than leaving the child in silence.
+ */
+export async function speakRemote(speakable: Speakable): Promise<boolean> {
+  cancelSpeech();
+
+  let audio: HTMLAudioElement;
+  try {
+    const response = await fetch("/api/speak", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text: speakable.text, lang: speakable.lang }),
+    });
+    if (!response.ok) return false;
+
+    const data = (await response.json()) as { audio?: string };
+    if (!data.audio) return false;
+
+    audio = new Audio(`data:audio/mpeg;base64,${data.audio}`);
+  } catch {
+    return false;
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (played: boolean) => {
+      if (settled) return;
+      settled = true;
+      current = null;
+      resolve(played);
+    };
+
+    audio.onended = () => finish(true);
+    audio.onerror = () => finish(false);
+    current = audio;
+
+    const started = audio.play();
+    if (started) started.catch(() => finish(false));
+  });
+}
+
 /** Resolves when the prompt has finished playing. */
 export function speak(speakable: Speakable): Promise<void> {
   cancelSpeech();

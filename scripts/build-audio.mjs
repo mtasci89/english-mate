@@ -151,7 +151,12 @@ const audioKeys = {
  * whichever one happens to load first.
  */
 function turkishHelpFor(word) {
-  const lead = word.unit === "colors" ? `Bu renk ${word.tr}` : `Bu bir ${word.tr}`;
+  const lead =
+    word.unit === "colors"
+      ? `Bu renk ${word.tr}`
+      : word.mass
+        ? `Bu ${word.tr}`
+        : `Bu bir ${word.tr}`;
   return `${lead}. İngilizcesi: ${word.en}.`;
 }
 
@@ -169,6 +174,7 @@ function collectJobs() {
     lines.moveIntro,
     lines.nameIntro,
     ...lines.askWhat,
+    ...lines.askColour,
     ...lines.praise,
     ...lines.close,
     ...lines.listening,

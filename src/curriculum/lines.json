@@ -6,6 +6,10 @@
     { "key": "line-ask-2", "text": "And this one?" },
     { "key": "line-ask-3", "text": "Tell me this one." }
   ],
+  "askColour": [
+    { "key": "line-askcolour-1", "text": "What colour is this?" },
+    { "key": "line-askcolour-2", "text": "And this colour?" }
+  ],
   "praise": [
     { "key": "line-praise-1", "text": "Perfect!" },
     { "key": "line-praise-2", "text": "Yes! Well done." },

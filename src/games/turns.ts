@@ -48,7 +48,10 @@ export function nextNameTurn(previousKey: string | null): Turn {
     expects: "speech",
     target: word.en,
     distractors: word.distractors,
-    prompt: line(pick(lines.askWhat)),
+    // Every colour is the same circle in a different shade, so "What is this?"
+    // reads as a trick question. Asking for the colour makes the picture make
+    // sense, and separates the two skills the child is actually practising.
+    prompt: line(pick(word.unit === "colors" ? lines.askColour : lines.askWhat)),
     trHelp: turkishHelpFor(word),
     englishRepeat: {
       text: englishRepeatFor(word),

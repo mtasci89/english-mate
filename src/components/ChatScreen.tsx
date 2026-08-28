@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { cancelSpeech, speak } from "../audio/player";
+import { cancelSpeech, speak, speakRemote } from "../audio/player";
 import { createRecognizer, type Recognizer } from "../speech/recognition";
 import { logAttempt, sessionId } from "../telemetry";
 import type { EngineState, Message, Settings, Speakable } from "../types";
@@ -37,6 +37,9 @@ export function ChatScreen({ settings, onExit }: Props) {
     { role: "assistant", text: "Hi. I am here. Tell me anything you want.", lang: "en" },
   ]);
   const [micDenied, setMicDenied] = useState(false);
+  /** Set when replies are coming from the offline rotation instead of the model. */
+  const [degraded, setDegraded] = useState<string | null>(null);
+  const [lifelineText, setLifelineText] = useState<string | null>(null);
 
   const messagesRef = useRef(messages);
   const recognizerRef = useRef<Recognizer | null>(null);
@@ -56,16 +59,26 @@ export function ChatScreen({ settings, onExit }: Props) {
   const childTurns = messages.filter((message) => message.role === "child").length;
   const lastAssistant = messages.filter((message) => message.role === "assistant").at(-1);
 
+  // Cloud TTS first so the reply sounds like the same character as the cached
+  // prompts; the browser voice stays as the fallback, not the default.
   async function say(speakable: Speakable) {
     setEngineState("speaking");
-    await speak(speakable);
+    const played = await speakRemote(speakable);
+    if (!played) await speak(speakable);
     if (activeRef.current) setEngineState("ready");
   }
 
-  function fallbackReply(input: string): Speakable {
-    const starter = nextStarter(settings.topic, childTurns);
-    if (!input) return { text: starter, lang: "en" };
-    return { text: `I understand. ${starter}`, lang: "en" };
+  /*
+   * The offline reply.
+   *
+   * This used to prepend "I understand." to a question drawn from a fixed
+   * rotation, which is exactly what a broken conversation sounds like — and
+   * because it was silent, a missing API key looked like the product working
+   * badly rather than a configuration fault. It no longer imitates a reply, and
+   * `degraded` puts the real reason on screen.
+   */
+  function fallbackReply(): Speakable {
+    return { text: nextStarter(settings.topic, childTurns), lang: "en" };
   }
 
   async function respondTo(input: string, history: Message[]) {
@@ -82,8 +95,13 @@ export function ChatScreen({ settings, onExit }: Props) {
       if (!response.ok) throw new Error(String(response.status));
       const data = (await response.json()) as { text: string; lang?: "en" | "tr" };
       reply = { text: data.text, lang: data.lang ?? "en" };
+      setDegraded(null);
     } catch {
-      reply = fallbackReply(input);
+      reply = fallbackReply();
+      setDegraded(
+        "The conversation service is not answering, so these replies are canned. " +
+          "Check that GEMINI_API_KEY is set in the deployment's environment variables.",
+      );
     }
 
     if (!activeRef.current) return;
@@ -116,7 +134,46 @@ export function ChatScreen({ settings, onExit }: Props) {
     const history = [...messagesRef.current, { role: "child" as const, text: clean, lang: "en" as const }];
     setTranscript(clean);
     setMessages(history);
+    setLifelineText(null);
     void respondTo(clean, history.slice(-8));
+  }
+
+  /*
+   * The Turkish lifeline.
+   *
+   * K5 says Turkish is a step, not an exit: the child hears what the sentence
+   * actually meant, then hears the English again and still owes an English
+   * answer. Saying "Şöyle sordum:" and repeating the same English sentence —
+   * which is what this did — helped nobody, because the sentence was never the
+   * part that was understood.
+   */
+  async function useLifeline() {
+    const english = lastAssistant?.text;
+    if (!english) return;
+
+    setEngineState("thinking");
+    let turkish: string | null = null;
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "translate", text: english }),
+      });
+      if (response.ok) {
+        const data = (await response.json()) as { text?: string };
+        turkish = data.text ?? null;
+      }
+    } catch {
+      // Falls through to the English-only path below.
+    }
+
+    if (!activeRef.current) return;
+
+    setLifelineText(turkish);
+    if (turkish) await say({ text: turkish, lang: "tr" });
+    // English always closes the turn, translated or not.
+    await say({ text: english, lang: "en" });
   }
 
   function startListening() {
@@ -170,6 +227,8 @@ export function ChatScreen({ settings, onExit }: Props) {
         {engineState === "listening" ? "Keep talking…" : "Hold and talk"}
       </button>
 
+      {lifelineText && <p className="lifeline-text">{lifelineText}</p>}
+
       <p className="heard-line">{transcript || " "}</p>
 
       <div className="helper-row">
@@ -185,17 +244,13 @@ export function ChatScreen({ settings, onExit }: Props) {
           type="button"
           className="lifeline-button"
           disabled={busy || !settings.turkishBridge}
-          onClick={() => {
-            const english = lastAssistant?.text ?? "";
-            void (async () => {
-              await say({ text: "Şöyle sordum:", lang: "tr" });
-              if (english) await say({ text: english, lang: "en" });
-            })();
-          }}
+          onClick={() => void useLifeline()}
         >
           Anlamadım
         </button>
       </div>
+
+      {degraded && <p className="browser-note">{degraded}</p>}
 
       {micDenied && (
         <p className="browser-note">

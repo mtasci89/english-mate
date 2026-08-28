@@ -9,13 +9,17 @@ export type Command = {
   visual: string;
 };
 
+export type Unit = "animals" | "food" | "toys" | "vehicles" | "nature" | "colors";
+
 export type Word = {
   key: string;
   en: string;
   tr: string;
-  unit: "animals" | "colors";
+  unit: Unit;
   visual: string;
   distractors: string[];
+  /** Turkish takes no article here: "Bu su", not "Bu bir su". */
+  mass?: boolean;
 };
 
 export type Line = { key: string; text: string };
@@ -26,6 +30,7 @@ export const lines = linesData as {
   moveIntro: Line;
   nameIntro: Line;
   askWhat: Line[];
+  askColour: Line[];
   praise: Line[];
   close: Line[];
   listening: Line[];
@@ -53,9 +58,14 @@ export const audioKeys = {
   wordSay: (key: string) => `word-${key}-say-en`,
 };
 
-/** "Bu bir kedi." for animals, "Bu renk kırmızı." for colours. */
+/** "Bu bir kedi.", "Bu renk kırmızı.", "Bu su." — whichever the word takes. */
 export function turkishHelpFor(word: Word) {
-  const lead = word.unit === "colors" ? `Bu renk ${word.tr}` : `Bu bir ${word.tr}`;
+  const lead =
+    word.unit === "colors"
+      ? `Bu renk ${word.tr}`
+      : word.mass
+        ? `Bu ${word.tr}`
+        : `Bu bir ${word.tr}`;
   return `${lead}. İngilizcesi: ${word.en}.`;
 }
 

@@ -34,7 +34,13 @@ function buildSystemPrompt(settings = {}) {
     "Reply with one or two very short sentences. Never go past twenty words in total.",
     "Use only common, concrete, everyday words a beginner would already know. No idioms, no phrasal verbs, no rare vocabulary.",
     "Prefer the present tense and simple sentence shapes.",
-    "Ask at most one short, easy follow-up question, and only when it keeps the conversation going.",
+    // What made the conversation feel canned: an acknowledgement that fits any
+    // answer, followed by a question from a fixed rotation. Both are banned.
+    "Never open with a generic acknowledgement. Do not say I understand, I see, that's nice, that's interesting, or anything that would fit whatever the child had said.",
+    "React to the specific thing the child just said: name it back, or say something true about it, so it is obvious you listened.",
+    "Ask at most one short, easy follow-up question, and make it about what the child just told you.",
+    "Never repeat a question you have already asked in this conversation. Look at the messages above and ask about something new.",
+    "If the child gives a one-word answer, say the whole sentence they meant, then ask the next thing.",
     "If the child makes an English mistake, do not lecture. Recast the idea naturally in correct English and keep talking.",
     "Avoid classroom wording such as correction, repeat after me, today's lesson, exercise, grammar, score, or homework.",
     turkishBridge
@@ -128,18 +134,43 @@ export async function handler(event) {
     return json(400, { error: "Missing text" });
   }
 
+  /*
+   * Translate mode backs the Turkish lifeline in free chat.
+   *
+   * The lifeline used to say "Şöyle sordum:" and then repeat the same English
+   * sentence, which explains nothing — the child who did not understand it the
+   * first time does not understand it the second. Now the sentence is actually
+   * rendered into Turkish before the English is repeated.
+   */
+  const translating = request.mode === "translate";
+
   const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-  const payload = {
-    systemInstruction: {
-      parts: [{ text: buildSystemPrompt(request.settings) }],
-    },
-    contents: toGeminiContents(request.messages, latestText),
-    generationConfig: {
-      temperature: 0.75,
-      topP: 0.9,
-      maxOutputTokens: 120,
-    },
-  };
+  const payload = translating
+    ? {
+        systemInstruction: {
+          parts: [
+            {
+              text: [
+                "Translate the English sentence into natural Turkish that a six-year-old understands.",
+                "Reply with the Turkish translation only: no quotes, no explanation, no English.",
+              ].join("\n"),
+            },
+          ],
+        },
+        contents: [{ role: "user", parts: [{ text: latestText }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 120 },
+      }
+    : {
+        systemInstruction: {
+          parts: [{ text: buildSystemPrompt(request.settings) }],
+        },
+        contents: toGeminiContents(request.messages, latestText),
+        generationConfig: {
+          temperature: 0.9,
+          topP: 0.95,
+          maxOutputTokens: 120,
+        },
+      };
 
   const response = await fetch(`${GEMINI_ENDPOINT}/${model}:generateContent`, {
     method: "POST",
@@ -168,5 +199,7 @@ export async function handler(event) {
     });
   }
 
-  return json(200, { text, lang: detectLanguage(text) });
+  // A translation is Turkish by construction; the heuristic would second-guess
+  // a short one that happens to carry no Turkish markers.
+  return json(200, { text, lang: translating ? "tr" : detectLanguage(text) });
 }

@@ -16,6 +16,11 @@
   to = "/.netlify/functions/attempts"
   status = 200
 
+[[redirects]]
+  from = "/api/speak"
+  to = "/.netlify/functions/speak"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]
