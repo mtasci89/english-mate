@@ -3,8 +3,11 @@ export type CorrectionStyle = "gentle" | "balanced" | "direct";
 export type Topic = "daily" | "school" | "family" | "feelings";
 export type EngineState = "ready" | "listening" | "thinking" | "speaking";
 
-/** The three modes, ordered by how much English the child has to produce. */
-export type GameId = "move" | "nameit" | "chat";
+/**
+ * The blocks of an evening, ordered by how much English the child has to
+ * produce. "session" marks the whole evening rather than one block.
+ */
+export type GameId = "move" | "nameit" | "chat" | "story" | "session";
 
 export type Settings = {
   childName: string;
@@ -68,6 +71,13 @@ export type Turn = {
   itemKey: string;
 };
 
+/**
+ * Why a block ended. The whole point of phase A: if the child leaves in the
+ * eighth minute of talking, the block is too long — and that is a fact about
+ * this child, not a thing to guess at.
+ */
+export type BlockOutcome = "started" | "completed" | "abandoned";
+
 export type Attempt = {
   ts: number;
   sessionId: string;
@@ -81,5 +91,10 @@ export type Attempt = {
   trLifeline: boolean;
   /** How many times the prompt was replayed before the answer. */
   hintLevel: number;
+  /** "block" rows record a session block beginning or ending, not an answer. */
+  kind?: "answer" | "block";
+  outcome?: BlockOutcome;
+  /** Seconds the block ran, on its closing row. */
+  seconds?: number;
   latencyMs: number | null;
 };

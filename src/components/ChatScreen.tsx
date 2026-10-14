@@ -9,6 +9,12 @@ import type { EngineState, Message, Settings, Speakable } from "../types";
 type Props = {
   settings: Settings;
   onExit: () => void;
+  /** Inside a session the conversation is fenced to the evening's topic. */
+  topic?: { key: string; en: string; seeds: string[]; bounds: string };
+  minutes?: number;
+  onDone?: () => void;
+  /** Rendered inside a session, so it drops its own header. */
+  embedded?: boolean;
 };
 
 const starters: Record<Settings["topic"], string[]> = {
@@ -31,7 +37,7 @@ function nextStarter(topic: Settings["topic"], count: number) {
  * pre-rendered. The structured games carry the daily practice; this one is the
  * reward at the top of the ladder.
  */
-export function ChatScreen({ settings, onExit }: Props) {
+export function ChatScreen({ settings, onExit, topic, minutes, onDone, embedded }: Props) {
   const [engineState, setEngineState] = useState<EngineState>("ready");
   const [transcript, setTranscript] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -42,6 +48,9 @@ export function ChatScreen({ settings, onExit }: Props) {
   const [degraded, setDegraded] = useState<string | null>(null);
   const [lifelineText, setLifelineText] = useState<string | null>(null);
 
+  // A talk block ends on the clock, checked only between turns so a reply is
+  // never cut off half-spoken.
+  const deadlineRef = useRef(minutes ? Date.now() + minutes * 60_000 : null);
   const messagesRef = useRef(messages);
   const recognizerRef = useRef<Recognizer | null>(null);
   const activeRef = useRef(true);
@@ -79,6 +88,9 @@ export function ChatScreen({ settings, onExit }: Props) {
    * `degraded` puts the real reason on screen.
    */
   function fallbackReply(): Speakable {
+    // Inside a session the opening questions come from the evening's topic.
+    const seeds = topic?.seeds;
+    if (seeds?.length) return { text: seeds[childTurns % seeds.length], lang: "en" };
     return { text: nextStarter(settings.topic, childTurns), lang: "en" };
   }
 
@@ -91,7 +103,7 @@ export function ChatScreen({ settings, onExit }: Props) {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: input, settings, messages: history }),
+        body: JSON.stringify({ text: input, settings, messages: history, topic }),
       });
       if (!response.ok) {
         // The server says exactly what went wrong — a missing key, a retired
@@ -133,6 +145,8 @@ export function ChatScreen({ settings, onExit }: Props) {
     // drill next, and collecting them must not delay the conversation.
     void captureGaps(input);
     await say(reply);
+
+    if (deadlineRef.current !== null && Date.now() >= deadlineRef.current) onDone?.();
   }
 
   async function captureGaps(input: string) {
@@ -241,13 +255,15 @@ export function ChatScreen({ settings, onExit }: Props) {
 
   return (
     <section className="game-screen" aria-label="Talk with me">
-      <header className="game-header">
-        <button type="button" className="ghost-button" onClick={onExit}>
-          ← Back
-        </button>
-        <span className={`engine-pill ${engineState}`}>{engineState}</span>
-        <span className="round-counter">💬</span>
-      </header>
+      {!embedded && (
+        <header className="game-header">
+          <button type="button" className="ghost-button" onClick={onExit}>
+            ← Back
+          </button>
+          <span className={`engine-pill ${engineState}`}>{engineState}</span>
+          <span className="round-counter">💬</span>
+        </header>
+      )}
 
       <div className="game-stage">
         <p className="game-prompt">{lastAssistant?.text}</p>

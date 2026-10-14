@@ -62,7 +62,12 @@ function gapTurn(gap: Gap): Turn {
   };
 }
 
-export function nextNameTurn(previousKey: string | null): Turn {
+/**
+ * `allowed` scopes the deck to the evening's topic. Vocabulary sticks through
+ * density: a week of animals puts the same words in front of the child in the
+ * game and again in the story, which scattered topics never do.
+ */
+export function nextNameTurn(previousKey: string | null, allowed?: string[]): Turn {
   /*
    * Captured gaps come first, and often: the child has already demonstrated
    * they need these, which no curriculum ordering can tell us. They are still
@@ -74,7 +79,8 @@ export function nextNameTurn(previousKey: string | null): Turn {
     return gapTurn(pick(gaps));
   }
 
-  const key = pickNext(wordKeys, previousKey);
+  const pool = allowed?.length ? wordKeys.filter((key) => allowed.includes(key)) : wordKeys;
+  const key = pickNext(pool.length ? pool : wordKeys, previousKey);
   const word = wordByKey.get(key)!;
 
   return {

@@ -7,7 +7,8 @@ const headers = {
 };
 
 const MAX_DAYS = 60;
-const GAMES = new Set(["move", "nameit", "chat"]);
+const GAMES = new Set(["move", "nameit", "chat", "story", "session"]);
+const OUTCOMES = new Set(["started", "completed", "abandoned"]);
 
 function json(statusCode, body) {
   return {
@@ -62,6 +63,9 @@ function sanitize(raw) {
     trLifeline: raw.trLifeline === true,
     hintLevel: number(raw.hintLevel) ?? 0,
     latencyMs: number(raw.latencyMs),
+    kind: raw.kind === "block" ? "block" : "answer",
+    outcome: OUTCOMES.has(raw.outcome) ? raw.outcome : null,
+    seconds: number(raw.seconds),
   };
 }
 

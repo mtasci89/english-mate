@@ -1,0 +1,57 @@
+{
+  "key": "animals-cat-and-bird",
+  "topic": "animals",
+  "title": "The Cat and the Bird",
+  "lines": [
+    { "id": "l01", "text": "This is a cat." },
+    { "id": "l02", "text": "The cat is small." },
+    { "id": "l03", "text": "The cat is black and white." },
+    { "id": "l04", "text": "The cat sits on the wall." },
+    { "id": "l05", "text": "The cat looks at the tree." },
+    { "id": "l06", "text": "A bird is in the tree." },
+    { "id": "l07", "text": "The bird is small too." },
+    { "id": "l08", "text": "The bird is yellow." },
+    { "id": "l09", "text": "The bird sings a song." },
+    { "id": "l10", "text": "The cat wants the bird." },
+    { "id": "l11", "text": "The cat jumps up." },
+    { "id": "l12", "text": "But the bird flies away." },
+    { "id": "l13", "text": "The bird flies to the roof." },
+    { "id": "l14", "text": "The cat cannot jump so high." },
+    { "id": "l15", "text": "Then a dog comes." },
+    { "id": "l16", "text": "The dog is big." },
+    { "id": "l17", "text": "The dog is brown." },
+    { "id": "l18", "text": "The dog barks at the cat." },
+    { "id": "l19", "text": "Now the cat runs away." },
+    { "id": "l20", "text": "The cat runs to the house." },
+    { "id": "l21", "text": "The bird sings again." },
+    { "id": "l22", "text": "The dog goes home." },
+    { "id": "l23", "text": "And the cat sleeps in the house." },
+    { "id": "l24", "text": "Good night, cat." }
+  ],
+  "questions": [
+    {
+      "id": "q1",
+      "after": "l06",
+      "text": "What is in the tree?",
+      "target": "bird",
+      "distractors": ["cat", "dog", "tree"],
+      "trHelp": "Ağaçta ne var?"
+    },
+    {
+      "id": "q2",
+      "after": "l17",
+      "text": "Which one is big?",
+      "target": "dog",
+      "distractors": ["cat", "bird"],
+      "trHelp": "Hangisi büyük?"
+    },
+    {
+      "id": "q3",
+      "after": "l23",
+      "text": "Where does the cat sleep?",
+      "target": "house",
+      "distractors": ["tree", "roof", "wall"],
+      "trHelp": "Kedi nerede uyuyor?"
+    }
+  ]
+}

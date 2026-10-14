@@ -23,6 +23,13 @@ const TURNS_PER_ROUND = 8;
 type Props = {
   gameId: Extract<GameId, "move" | "nameit">;
   onExit: () => void;
+  /**
+   * Inside an evening session a block ends on the clock, not on a turn count,
+   * and the words come from that evening's topic.
+   */
+  minutes?: number;
+  topicWords?: string[];
+  onDone?: () => void;
 };
 
 const stateLabels: Record<EngineState, string> = {
@@ -32,7 +39,7 @@ const stateLabels: Record<EngineState, string> = {
   speaking: "speaking",
 };
 
-export function GameScreen({ gameId, onExit }: Props) {
+export function GameScreen({ gameId, onExit, minutes, topicWords, onDone }: Props) {
   const [turn, setTurn] = useState<Turn | null>(null);
   const [engineState, setEngineState] = useState<EngineState>("speaking");
   const [transcript, setTranscript] = useState("");
@@ -62,8 +69,16 @@ export function GameScreen({ gameId, onExit }: Props) {
     if (activeRef.current) setEngineState("ready");
   }, []);
 
+  // A block runs to the clock; a stand-alone round runs to a turn count. The
+  // deadline is only ever checked between turns, so nothing is cut off
+  // mid-sentence.
+  const deadlineRef = useRef(minutes ? Date.now() + minutes * 60_000 : null);
+
   const startTurn = useCallback(async () => {
-    const next = gameId === "move" ? nextMoveTurn(previousKeyRef.current) : nextNameTurn(previousKeyRef.current);
+    const next =
+      gameId === "move"
+        ? nextMoveTurn(previousKeyRef.current)
+        : nextNameTurn(previousKeyRef.current, topicWords);
     previousKeyRef.current = next.itemKey;
     turnRef.current = next;
     hintLevelRef.current = 0;
@@ -74,7 +89,7 @@ export function GameScreen({ gameId, onExit }: Props) {
     setLifelineText(null);
     preload([next.prompt, next.englishRepeat]);
     await speakAll([next.prompt]);
-  }, [gameId, speakAll]);
+  }, [gameId, speakAll, topicWords]);
 
   useEffect(() => {
     activeRef.current = true;
@@ -105,6 +120,15 @@ export function GameScreen({ gameId, onExit }: Props) {
       const nextCount = completed + 1;
       setCompleted(nextCount);
 
+      if (deadlineRef.current !== null) {
+        if (Date.now() >= deadlineRef.current) {
+          onDone?.();
+          return;
+        }
+        await startTurn();
+        return;
+      }
+
       if (nextCount >= TURNS_PER_ROUND) {
         setFinished(true);
         await speakAll([sessionEndLine()]);
@@ -113,7 +137,7 @@ export function GameScreen({ gameId, onExit }: Props) {
 
       await startTurn();
     },
-    [completed, speakAll, startTurn],
+    [completed, speakAll, startTurn, onDone],
   );
 
   const handleAnswer = useCallback(
@@ -244,7 +268,7 @@ export function GameScreen({ gameId, onExit }: Props) {
         </button>
         <span className={`engine-pill ${engineState}`}>{stateLabels[engineState]}</span>
         <span className="round-counter" aria-label="Progress in this round">
-          {Math.min(completed + 1, TURNS_PER_ROUND)} / {TURNS_PER_ROUND}
+          {minutes ? `${completed}` : `${Math.min(completed + 1, TURNS_PER_ROUND)} / ${TURNS_PER_ROUND}`}
         </span>
       </header>
 

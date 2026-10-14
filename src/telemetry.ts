@@ -61,6 +61,51 @@ export function logAttempt(attempt: Attempt) {
   });
 }
 
+/** One row per block start and finish; the parent panel reads completion from these. */
+export function logBlock(
+  game: Attempt["game"],
+  itemKey: string,
+  outcome: Attempt["outcome"],
+  seconds?: number,
+) {
+  logAttempt({
+    ts: Date.now(),
+    sessionId: sessionId(),
+    game,
+    itemKey,
+    target: null,
+    heard: null,
+    accepted: outcome === "completed",
+    score: null,
+    trLifeline: false,
+    hintLevel: 0,
+    latencyMs: null,
+    kind: "block",
+    outcome,
+    seconds,
+  });
+}
+
+/** Completion per block kind, which is what decides how long each block should be. */
+export function blockCompletion(attempts: Attempt[]) {
+  const started = new Map<string, number>();
+  const completed = new Map<string, number>();
+
+  for (const attempt of attempts) {
+    if (attempt.kind !== "block") continue;
+    const bucket = attempt.outcome === "completed" ? completed : started;
+    if (attempt.outcome === "started") started.set(attempt.itemKey, (started.get(attempt.itemKey) ?? 0) + 1);
+    else if (attempt.outcome === "completed") bucket.set(attempt.itemKey, (bucket.get(attempt.itemKey) ?? 0) + 1);
+  }
+
+  return [...started.entries()].map(([key, runs]) => ({
+    key,
+    runs,
+    completed: completed.get(key) ?? 0,
+    rate: runs ? (completed.get(key) ?? 0) / runs : 0,
+  }));
+}
+
 export type Summary = {
   attempts: number;
   accepted: number;
@@ -73,7 +118,9 @@ export type Summary = {
 
 function summarize(attempts: Attempt[], days: number, source: Summary["source"]): Summary {
   const since = Date.now() - days * 864e5;
-  const recent = attempts.filter((attempt) => attempt.ts >= since);
+  // Block rows are bookkeeping, not answers; counting them would skew the
+  // accept rate the phase-zero gate is read from.
+  const recent = attempts.filter((attempt) => attempt.ts >= since && attempt.kind !== "block");
   const accepted = recent.filter((attempt) => attempt.accepted).length;
   const lifelines = recent.filter((attempt) => attempt.trLifeline).length;
 
@@ -86,6 +133,24 @@ function summarize(attempts: Attempt[], days: number, source: Summary["source"])
     days,
     source,
   };
+}
+
+export function localAttempts(): Attempt[] {
+  return readLocal();
+}
+
+export async function fetchAttempts(days = 7): Promise<Attempt[]> {
+  const since = Date.now() - days * 864e5;
+  try {
+    const response = await fetch(`/api/attempts?days=${days}`);
+    if (response.ok) {
+      const data = (await response.json()) as { attempts?: Attempt[] };
+      if (Array.isArray(data.attempts) && data.attempts.length) return data.attempts;
+    }
+  } catch {
+    // Fall through to the local buffer.
+  }
+  return readLocal().filter((attempt) => attempt.ts >= since);
 }
 
 export async function fetchSummary(days = 7): Promise<Summary> {

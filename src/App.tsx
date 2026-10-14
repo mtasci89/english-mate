@@ -1,26 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { loadManifest, loadVoices } from "./audio/player";
-import { ChatScreen } from "./components/ChatScreen";
-import { GameScreen } from "./components/GameScreen";
-import { HomeScreen } from "./components/HomeScreen";
 import { ParentPanel } from "./components/ParentPanel";
+import { SessionScreen } from "./components/SessionScreen";
+import { TonightScreen } from "./components/TonightScreen";
+import { readProgramme, tonight, writeProgramme, type Programme } from "./session/programme";
 import { readSettings, writeSettings } from "./settings";
-import type { GameId, Settings } from "./types";
+import type { Settings } from "./types";
 
-type Screen = { name: "home" } | { name: "game"; gameId: GameId } | { name: "parent" };
+type Screen = "tonight" | "session" | "parent";
 
+/**
+ * One evening, one programme.
+ *
+ * There is no menu. The child is not asked which game they fancy — the earlier
+ * shape made a six-year-old stand in front of a screen and decide, which is the
+ * opposite of a toy. Tonight's topic and blocks come from the weekly programme
+ * the parent set, and the session runs them in order.
+ */
 export function App() {
   const [settings, setSettings] = useState<Settings>(() => readSettings());
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [programme, setProgramme] = useState<Programme>(() => readProgramme());
+  const [screen, setScreen] = useState<Screen>("tonight");
 
   // Both pulled in early: the manifest so the first prompt plays from cache,
-  // the voice list because the browser populates it asynchronously and an
-  // unloaded list is what makes the first utterance come out silent.
+  // the voice list because the browser fills it asynchronously.
   useEffect(() => {
     void loadManifest();
     void loadVoices();
   }, []);
+
+  const { plan, topic } = useMemo(() => tonight(programme), [programme]);
 
   function updateSettings(next: Partial<Settings>) {
     setSettings((current) => {
@@ -30,28 +40,40 @@ export function App() {
     });
   }
 
-  const goHome = () => setScreen({ name: "home" });
+  function updateProgramme(next: Programme) {
+    setProgramme(next);
+    writeProgramme(next);
+  }
 
   return (
     <main className="app-shell">
-      {screen.name === "home" && (
-        <HomeScreen
-          childName={settings.childName}
-          onPick={(gameId) => setScreen({ name: "game", gameId })}
-          onOpenParent={() => setScreen({ name: "parent" })}
+      {screen === "tonight" && (
+        <TonightScreen
+          plan={plan}
+          topic={topic}
+          startAt={programme.startAt}
+          onStart={() => setScreen("session")}
+          onOpenParent={() => setScreen("parent")}
         />
       )}
 
-      {screen.name === "game" && screen.gameId === "chat" && (
-        <ChatScreen settings={settings} onExit={goHome} />
+      {screen === "session" && (
+        <SessionScreen
+          plan={plan}
+          topic={topic}
+          settings={settings}
+          onExit={() => setScreen("tonight")}
+        />
       )}
 
-      {screen.name === "game" && screen.gameId !== "chat" && (
-        <GameScreen gameId={screen.gameId} onExit={goHome} />
-      )}
-
-      {screen.name === "parent" && (
-        <ParentPanel settings={settings} onChange={updateSettings} onExit={goHome} />
+      {screen === "parent" && (
+        <ParentPanel
+          settings={settings}
+          onChange={updateSettings}
+          programme={programme}
+          onProgrammeChange={updateProgramme}
+          onExit={() => setScreen("tonight")}
+        />
       )}
     </main>
   );

@@ -1,0 +1,80 @@
+[
+  {
+    "key": "animals",
+    "en": "Animals",
+    "tr": "Hayvanlar",
+    "words": ["cat", "dog", "bird", "fish", "horse", "cow", "sheep", "duck", "bear", "rabbit", "lion", "frog"],
+    "seeds": [
+      "Do you have an animal at home?",
+      "Which animal do you like best?",
+      "Tell me about a big animal.",
+      "What animal is fast?"
+    ],
+    "bounds": "pets, farm animals, wild animals, what animals eat, what sounds they make"
+  },
+  {
+    "key": "food",
+    "en": "Food",
+    "tr": "Yiyecekler",
+    "words": ["apple", "banana", "bread", "milk", "cheese", "egg", "cake", "water"],
+    "seeds": [
+      "What did you eat today?",
+      "What food do you like best?",
+      "Do you help in the kitchen?",
+      "What do you drink in the morning?"
+    ],
+    "bounds": "meals, fruit, drinks, cooking at home, what tastes nice"
+  },
+  {
+    "key": "toys",
+    "en": "Toys and play",
+    "tr": "Oyuncaklar",
+    "words": ["ball", "teddy", "balloon", "kite", "drum", "book"],
+    "seeds": [
+      "What is your favourite toy?",
+      "What do you play with your friends?",
+      "Do you like books?",
+      "Tell me about a game you like."
+    ],
+    "bounds": "toys, games, playing with friends, books and stories"
+  },
+  {
+    "key": "vehicles",
+    "en": "Things that go",
+    "tr": "Taşıtlar",
+    "words": ["car", "bus", "plane", "bike", "train", "boat"],
+    "seeds": [
+      "How do you go to school?",
+      "Have you been on a plane?",
+      "Can you ride a bike?",
+      "What goes fast?"
+    ],
+    "bounds": "cars, buses, bikes, trains, planes, boats, going places"
+  },
+  {
+    "key": "nature",
+    "en": "Outside",
+    "tr": "Doğa",
+    "words": ["sun", "moon", "star", "tree", "flower", "rain"],
+    "seeds": [
+      "How is the weather today?",
+      "Do you play outside?",
+      "What do you see in the sky?",
+      "Do you like the rain?"
+    ],
+    "bounds": "weather, sky, trees and flowers, parks, playing outdoors"
+  },
+  {
+    "key": "colors",
+    "en": "Colours",
+    "tr": "Renkler",
+    "words": ["red", "blue", "green", "yellow", "black", "white", "orange", "purple"],
+    "seeds": [
+      "What colour is your room?",
+      "What is your favourite colour?",
+      "Tell me something blue.",
+      "What colour are your shoes?"
+    ],
+    "bounds": "colours of everyday things, clothes, rooms, drawing and painting"
+  }
+]

@@ -27,7 +27,7 @@ function json(statusCode, body) {
   };
 }
 
-function buildSystemPrompt(settings = {}) {
+function buildSystemPrompt(settings = {}, subject = null) {
   const level = settings.level ?? "sentence";
   const topic = settings.topic ?? "daily";
   const correctionStyle = settings.correctionStyle ?? "gentle";
@@ -72,8 +72,19 @@ function buildSystemPrompt(settings = {}) {
     turkishBridge
       ? "If the child uses Turkish or seems stuck, answer the meaning in one short Turkish sentence, then immediately give one easy English phrase for them to use. Always end your reply in English, never in Turkish."
       : "Keep the conversation in English.",
+    // The evening has a subject, chosen by the parent. Staying inside it is not
+    // only a fence: vocabulary sticks through density, and a week of animals
+    // puts the same words in front of the child again and again.
+    subject
+      ? `Tonight's subject is ${subject.en}. Keep the whole conversation inside it: ${subject.bounds}. If the child wanders off, answer them kindly in one line and steer back with a question about ${subject.en}.`
+      : "",
+    subject?.words?.length
+      ? `Prefer these words, and use several of them: ${subject.words.join(", ")}.`
+      : "",
     "Never discuss unsafe, adult, violent, sexual, hateful, political persuasion, or self-harm content. Redirect warmly to ordinary child-safe topics.",
-  ].join("\n");
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function toGeminiContents(messages = [], latestText = "") {
@@ -257,7 +268,7 @@ export async function handler(event) {
       }
     : {
         systemInstruction: {
-          parts: [{ text: buildSystemPrompt(request.settings) }],
+          parts: [{ text: buildSystemPrompt(request.settings, request.topic) }],
         },
         contents: toGeminiContents(request.messages, latestText),
         generationConfig: {

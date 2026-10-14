@@ -22,7 +22,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -127,6 +127,10 @@ function readJson(path) {
 }
 
 const commands = readJson(join(ROOT, "src", "curriculum", "commands.json"));
+const topics = readJson(join(ROOT, "src", "curriculum", "topics.json"));
+const stories = readdirSync(join(ROOT, "src", "curriculum", "stories"))
+  .filter((name) => name.endsWith(".json"))
+  .map((name) => readJson(join(ROOT, "src", "curriculum", "stories", name)));
 const words = readJson(join(ROOT, "src", "curriculum", "words.json"));
 const lines = readJson(join(ROOT, "src", "curriculum", "lines.json"));
 
@@ -142,7 +146,15 @@ const audioKeys = {
   wordEn: (key) => `word-${key}-en`,
   wordTr: (key) => `word-${key}-tr`,
   wordSay: (key) => `word-${key}-say-en`,
+  topicIntro: (key) => `topic-${key}-intro`,
+  storyLine: (storyKey, lineId) => `story-${storyKey}-${lineId}`,
+  storyQuestion: (storyKey, questionId) => `story-${storyKey}-${questionId}`,
 };
+
+/** Mirrors `topicIntroText()` in src/curriculum/index.ts. */
+function topicIntroText(topicEn) {
+  return `Tonight we talk about ${topicEn.toLowerCase()}.`;
+}
 
 /**
  * Mirrors `turkishHelpFor()` in `src/curriculum/index.ts` exactly. If this
@@ -173,6 +185,11 @@ function collectJobs() {
   };
 
   const lineEntries = [
+    lines.sessionHello,
+    lines.toTalk,
+    lines.toStory,
+    lines.storyDone,
+    lines.blockDone,
     lines.moveIntro,
     lines.nameIntro,
     ...lines.askWhat,
@@ -194,6 +211,21 @@ function collectJobs() {
   for (const command of commands) {
     add(audioKeys.commandEn(command.key), command.en, "en");
     add(audioKeys.commandTr(command.key), command.tr, "tr");
+  }
+
+  // One announcement per topic, and every story line and question: the longest
+  // block of the evening is listening, and it must never wait on a model.
+  for (const topic of topics) {
+    add(audioKeys.topicIntro(topic.key), topicIntroText(topic.en), "en");
+  }
+
+  for (const story of stories) {
+    for (const line of story.lines) {
+      add(audioKeys.storyLine(story.key, line.id), line.text, "en");
+    }
+    for (const question of story.questions) {
+      add(audioKeys.storyQuestion(story.key, question.id), question.text, "en");
+    }
   }
 
   for (const word of words) {

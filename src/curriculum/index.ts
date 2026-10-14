@@ -33,6 +33,11 @@ export type Line = { key: string; text: string };
 export const commands = commandsData as Command[];
 export const words = wordsData as Word[];
 export const lines = linesData as {
+  sessionHello: Line;
+  toTalk: Line;
+  toStory: Line;
+  storyDone: Line;
+  blockDone: Line;
   moveIntro: Line;
   nameIntro: Line;
   askWhat: Line[];
@@ -63,7 +68,14 @@ export const audioKeys = {
   wordEn: (key: string) => `word-${key}-en`,
   wordTr: (key: string) => `word-${key}-tr`,
   wordSay: (key: string) => `word-${key}-say-en`,
+  /** "Tonight we talk about animals." — one per topic. */
+  topicIntro: (key: string) => `topic-${key}-intro`,
 };
+
+/** Mirrored by scripts/build-audio.mjs; change both together. */
+export function topicIntroText(topicEn: string) {
+  return `Tonight we talk about ${topicEn.toLowerCase()}.`;
+}
 
 /**
  * The Turkish half of the lifeline, and only the Turkish half.
