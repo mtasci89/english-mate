@@ -15,8 +15,9 @@
  *   npm run fetch:stories -- --dry-run --topic=food
  *
  * Search and the audio files are public. Reading a book's pages is not: the
- * `/read` endpoint needs a logged-in StoryWeaver session, so the browser's
- * Cookie header goes in `.env.storyweaver` (one line, gitignored). Questions
+ * `/read` endpoint needs a logged-in StoryWeaver session: copy any book's
+ * `read?…` request in Chrome's Network tab as cURL and run
+ * `pbpaste > .env.storyweaver` (gitignored). Questions
  * are written by Gemini from `GEMINI_API_KEY` in `.env.local`; without a key
  * the story is still saved, just without questions.
  *
@@ -62,16 +63,54 @@ function loadEnvFile(path) {
   }
 }
 
-/** The cookie file holds the raw header value, nothing else. */
-function readCookie() {
+/**
+ * Pulls request headers out of Chrome's "Copy as cURL" text.
+ *
+ * Chrome writes the cookie as `-b '…'` (or as a `cookie:` header in older
+ * versions), and switches to `$'…'` quoting when a value has odd characters.
+ * Every header is kept, not just the cookie: whatever the site checks besides
+ * the session — a CSRF token, an auth header — rides along unchanged.
+ */
+export function parseCurl(text) {
+  const headers = {};
+  const unquote = (quoted) =>
+    quoted.startsWith("$'")
+      ? quoted.slice(2, -1).replace(/\\'/g, "'").replace(/\\\\/g, "\\")
+      : quoted.slice(1, -1);
+  const pattern = /(?:^|\s)(-H|--header|-b|--cookie)\s+(\$'(?:\\.|[^'\\])*'|'[^']*'|"(?:\\.|[^"\\])*")/g;
+  let match;
+  while ((match = pattern.exec(text))) {
+    const value = unquote(match[2]);
+    if (match[1] === "-b" || match[1] === "--cookie") {
+      headers.cookie = value;
+      continue;
+    }
+    const colon = value.indexOf(":");
+    if (colon < 1) continue;
+    const name = value.slice(0, colon).trim().toLowerCase();
+    // Let fetch set these itself; copying them breaks compressed or HTTP/2 replies.
+    if (["host", "content-length", "accept-encoding", "connection"].includes(name) || name.startsWith(":")) continue;
+    headers[name] = value.slice(colon + 1).trim();
+  }
+  return headers;
+}
+
+/**
+ * `.env.storyweaver` holds either Chrome's "Copy as cURL" for a book's
+ * `read` request (simplest: `pbpaste > .env.storyweaver`) or just the raw
+ * Cookie header value.
+ */
+function readAuth() {
   const path = join(ROOT, ".env.storyweaver");
-  if (process.env.STORYWEAVER_COOKIE) return process.env.STORYWEAVER_COOKIE;
-  if (!existsSync(path)) return "";
-  return readFileSync(path, "utf8")
-    .trim()
-    .replace(/^STORYWEAVER_COOKIE=/, "")
-    .replace(/^cookie:\s*/i, "")
-    .replace(/^["']|["']$/g, "");
+  const raw = process.env.STORYWEAVER_COOKIE ?? (existsSync(path) ? readFileSync(path, "utf8").trim() : "");
+  if (!raw) return null;
+  if (/^curl\s/.test(raw)) return parseCurl(raw);
+  return {
+    cookie: raw
+      .replace(/^STORYWEAVER_COOKIE=/, "")
+      .replace(/^cookie:\s*/i, "")
+      .replace(/^["']|["']$/g, ""),
+  };
 }
 
 const decodeEntities = (text) =>
@@ -221,10 +260,8 @@ const browserHeaders = {
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36",
 };
 
-async function getJson(url, cookie) {
-  const response = await fetch(url, {
-    headers: { ...browserHeaders, ...(cookie ? { cookie } : {}) },
-  });
+async function getJson(url, auth) {
+  const response = await fetch(url, { headers: { ...browserHeaders, ...auth } });
   if (response.status === 401 || response.status === 403) {
     throw new Error(
       `${response.status} from ${url.split("?")[0]} — the StoryWeaver cookie is missing or expired. ` +
@@ -358,8 +395,8 @@ export function validQuestions(story, raw) {
 
 /* ---------- main ---------- */
 
-async function fetchOne(slug, cookie, topic, meta) {
-  const read = await getJson(`${SITE}/api/v1/stories/${slug}/read?ignore_count=true&source=`, cookie);
+async function fetchOne(slug, auth, topic, meta) {
+  const read = await getJson(`${SITE}/api/v1/stories/${slug}/read?ignore_count=true&source=`, auth);
   const data = read.data ?? read;
   const vtt = data.vttFilePath ? await getText(data.vttFilePath).catch(() => "") : "";
   return toStory(read, vtt, { topic, meta });
@@ -412,18 +449,25 @@ async function main() {
     return;
   }
 
-  const cookie = readCookie();
-  if (!cookie) {
-    console.error("No StoryWeaver cookie. Put the browser's Cookie header in .env.storyweaver (see README).");
+  const auth = readAuth();
+  if (!auth) {
+    console.error("No StoryWeaver login. Copy a book's read request as cURL in Chrome, then: pbpaste > .env.storyweaver");
     process.exit(1);
   }
+  if (!auth.cookie) {
+    console.error(
+      ".env.storyweaver has no cookie in it. Copy the `read?…` request (not a .js file) while logged in, and paste again.",
+    );
+    process.exit(1);
+  }
+  console.log(`Using the saved login (${Object.keys(auth).join(", ")}).`);
 
   let saved = 0;
   for (const book of candidates) {
     if (saved >= count) break;
     process.stdout.write(`- ${book.slug} … `);
     try {
-      const story = await fetchOne(book.slug, cookie, topic.key, book);
+      const story = await fetchOne(book.slug, auth, topic.key, book);
       if (!story.audio) {
         console.log("no narration, skipped");
       } else if (!slug && story.words > maxWords) {

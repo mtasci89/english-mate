@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 // @ts-expect-error -- plain ESM script, no type declarations
-import { parseVtt, toStory, validQuestions } from "./fetch-stories.mjs";
+import { parseCurl, parseVtt, toStory, validQuestions } from "./fetch-stories.mjs";
 
 // Shaped like StoryWeaver's own files: loose arrows, a last cue that runs on.
 const vtt = `WEBVTT
@@ -72,5 +72,23 @@ describe("fetch-stories", () => {
     expect(kept).toEqual([
       { id: "q1", after: "p01", text: "Who sat?", target: "cat", distractors: ["dog", "bird"], trHelp: "Kim oturdu?" },
     ]);
+  });
+
+  it("reads headers from Chrome's Copy as cURL", () => {
+    const curl = [
+      "curl 'https://storyweaver.org.in/api/v1/stories/1-the-cat/read?ignore_count=false&source=' \\",
+      "  -H 'accept: application/json' \\",
+      "  -H 'accept-encoding: gzip' \\",
+      "  -b '_session=abc; lang=en' \\",
+      "  -H $'x-csrf-token: it\\'s' \\",
+      "  -H 'user-agent: Mozilla/5.0'",
+    ].join("\n");
+    expect(parseCurl(curl)).toEqual({
+      accept: "application/json",
+      cookie: "_session=abc; lang=en",
+      "x-csrf-token": "it's",
+      "user-agent": "Mozilla/5.0",
+    });
+    expect(parseCurl("curl 'x' -H 'Cookie: a=1'")).toEqual({ cookie: "a=1" });
   });
 });
