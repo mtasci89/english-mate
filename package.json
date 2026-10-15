@@ -10,9 +10,10 @@
     "build": "vite build",
     "build:netlify": "vite build",
     "build:audio": "node scripts/build-audio.mjs",
+    "fetch:stories": "node scripts/fetch-stories.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "lint": "tsc --noEmit && node --check netlify/functions/chat.mjs && node --check netlify/functions/attempts.mjs && node --check scripts/build-audio.mjs && node --check netlify/functions/speak.mjs"
+    "lint": "tsc --noEmit && node --check netlify/functions/chat.mjs && node --check netlify/functions/attempts.mjs && node --check scripts/build-audio.mjs && node --check scripts/fetch-stories.mjs && node --check netlify/functions/speak.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^8.1.0",

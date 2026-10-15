@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { loadVoices, turkishVoiceAvailable } from "../audio/player";
 import { wordKeys } from "../curriculum";
 import { listGaps } from "../curriculum/gaps";
+import { isApproved, setApproved, stories } from "../curriculum/stories";
 import { progressSummary } from "../curriculum/srs";
 import { correctionLabels, levelLabels, topicLabels } from "../settings";
 import { blockCompletion, fetchAttempts, fetchSummary, type Summary } from "../telemetry";
@@ -45,6 +46,11 @@ export function ParentPanel({
   const [turkishVoice, setTurkishVoice] = useState(true);
   const vocabulary = progressSummary(wordKeys);
   const gaps = listGaps();
+  const [approvals, setApprovals] = useState(() =>
+    Object.fromEntries(stories.map((story) => [story.key, isApproved(story)])),
+  );
+  const fetched = stories.filter((story) => story.source);
+  const topicName = (key: string) => topics.find((topic) => topic.key === key)?.tr ?? key;
 
   useEffect(() => {
     let cancelled = false;
@@ -164,6 +170,61 @@ export function ParentPanel({
                 <span>
                   {block.completed}/{block.runs} · {Math.round(block.rate * 100)}%
                 </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/*
+        Books fetched from StoryWeaver wait here until a parent has read them.
+        The text is the whole book, so approving is a two-minute read, and the
+        credits travel with it because the licence (CC BY 4.0) asks for them.
+      */}
+      {fetched.length > 0 && (
+        <div className="engine-plan">
+          <h3>Hikâyeler</h3>
+          <p>
+            Onaylanmayan kitap çocuğa okunmaz. Metnin tamamını okuyup uygunsa
+            işaretle.
+          </p>
+          <ul className="story-list">
+            {fetched.map((story) => (
+              <li key={story.key}>
+                <label className="week-row">
+                  <input
+                    type="checkbox"
+                    checked={approvals[story.key]}
+                    onChange={(event) => {
+                      setApproved(story.key, event.target.checked);
+                      setApprovals({ ...approvals, [story.key]: event.target.checked });
+                    }}
+                  />
+                  <strong>{story.title}</strong>
+                </label>
+                <span className="story-meta">
+                  {topicName(story.topic)} · {story.lines.length} sayfa · {story.words} kelime ·{" "}
+                  {story.questions.length} soru
+                </span>
+                <details>
+                  <summary>Metni oku</summary>
+                  {story.lines.map((line) => (
+                    <p key={line.id}>{line.text}</p>
+                  ))}
+                  {story.questions.map((question) => (
+                    <p key={question.id}>
+                      <em>
+                        Soru ({question.after}): {question.text} → {question.target}
+                      </em>
+                    </p>
+                  ))}
+                  <p className="story-meta">
+                    {story.source?.attribution}{" "}
+                    <a href={story.source?.url} target="_blank" rel="noreferrer">
+                      StoryWeaver
+                    </a>
+                  </p>
+                </details>
               </li>
             ))}
           </ul>

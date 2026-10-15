@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { preloadNarration, playSlice, stopNarration } from "../audio/narration";
 import { cancelSpeech, speak } from "../audio/player";
 import { lines } from "../curriculum";
 import {
+  NARRATION_RATE,
   storyAudioKeys,
   storySeconds,
   storiesByTopic,
@@ -23,8 +25,8 @@ type Props = {
 /**
  * The listening block.
  *
- * The child does not have to perform here. Lines play one after another from
- * cached audio, and every so often the story stops for one easy question — just
+ * The child does not have to perform here. Lines play one after another — a
+ * human narrator's page for a fetched book, cached TTS for a hand-written one — and every so often the story stops for one easy question — just
  * enough to know they are still with it. A missed question costs nothing: the
  * story carries on either way, because stopping a story to drill a child is how
  * you teach them to dread stories.
@@ -70,6 +72,7 @@ export function StoryBlock({ topic, minutes, onDone }: Props) {
     return () => {
       activeRef.current = false;
       cancelSpeech();
+      stopNarration();
       recognizerRef.current?.cancel();
     };
   }, []);
@@ -118,11 +121,20 @@ export function StoryBlock({ topic, minutes, onDone }: Props) {
     }
 
     const line = current.lines[lineIndex];
-    await say({
-      text: line.text,
-      lang: "en",
-      audioKey: storyAudioKeys.line(current.key, line.id),
-    });
+    let played = false;
+    if (current.audio && typeof line.start === "number") {
+      setEngineState("speaking");
+      played = await playSlice(current.audio, line.start, line.end ?? line.start + 10, NARRATION_RATE);
+    }
+    // No narration, or it would not load: a synthetic voice is worse than the
+    // narrator but far better than the story stopping.
+    if (!played && activeRef.current) {
+      await say({
+        text: line.text,
+        lang: "en",
+        audioKey: current.audio ? undefined : storyAudioKeys.line(current.key, line.id),
+      });
+    }
     if (!activeRef.current) return;
 
     const pending = current.questions.find((item) => item.after === line.id);
@@ -133,6 +145,10 @@ export function StoryBlock({ topic, minutes, onDone }: Props) {
 
     setLineIndex((index) => index + 1);
   }, [story, lineIndex, say, askQuestion, onDone]);
+
+  useEffect(() => {
+    if (story?.audio) preloadNarration(story.audio);
+  }, [story]);
 
   // Lines play on their own; only a question waits for the child.
   useEffect(() => {
@@ -200,7 +216,10 @@ export function StoryBlock({ topic, minutes, onDone }: Props) {
     <section className="story-block" aria-label="Story">
       <div className="story-stage">
         <span className="story-title">{story?.title}</span>
-        <p className="story-line">{question ? question.text : spoken?.text}</p>
+        {spoken?.image && <img className="story-image" src={spoken.image} alt="" />}
+        <p className={`story-line ${!question && (spoken?.text.length ?? 0) > 70 ? "long" : ""}`}>
+          {question ? question.text : spoken?.text}
+        </p>
       </div>
 
       {question ? (

@@ -220,7 +220,9 @@ function collectJobs() {
   }
 
   for (const story of stories) {
-    for (const line of story.lines) {
+    // A fetched book brings its own human narration; only its questions,
+    // which were written here, need a voice.
+    for (const line of story.audio ? [] : story.lines) {
       add(audioKeys.storyLine(story.key, line.id), line.text, "en");
     }
     for (const question of story.questions) {
